@@ -1,7 +1,7 @@
 import { serve } from '@hono/node-server'
 import { resolve } from 'node:path'
 import { createApp } from './app'
-import { loadConfig } from './config'
+import { checkDatabaseUrl, loadConfig } from './config'
 import { migrate, pgDb, pgliteDb } from './db'
 import { consoleMailer, fileMailer, smtpMailer } from './mailer'
 import { createErrorReporter, createLogger, Metrics, type Level } from './observability'
@@ -10,6 +10,13 @@ import { loadNotifyConfig, Notifier, realChannels } from './notify'
 const config = loadConfig()
 const logger = createLogger((process.env.LOG_LEVEL as Level) || 'info')
 const metrics = new Metrics()
+if (config.databaseUrl) {
+  const problem = checkDatabaseUrl(config.databaseUrl)
+  if (problem) {
+    console.error(`Configuration de la base invalide : ${problem}.`)
+    process.exit(1)
+  }
+}
 if (process.env.NODE_ENV === 'production' && !config.databaseUrl) {
   console.error('DATABASE_URL est obligatoire en production.')
   process.exit(1)

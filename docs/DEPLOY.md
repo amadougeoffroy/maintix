@@ -12,7 +12,7 @@ Un seul service applicatif (API + front servi en statique) et un Postgres.
    | Variable | Rôle |
    |---|---|
    | `APP_URL` | URL publique exacte, en **https** |
-   | `POSTGRES_PASSWORD` | mot de passe de la base (long, aléatoire) |
+   | `POSTGRES_PASSWORD` | mot de passe de la base (long, aléatoire ; caractères spéciaux acceptés) |
    | `BOOTSTRAP_TOKEN` | jeton aléatoire pour la première installation |
    | `SMTP_URL` | `smtp://utilisateur:motdepasse@hôte:587` (ou `smtps://…:465`) |
    | `MAIL_FROM` | expéditeur des e-mails |
@@ -24,7 +24,7 @@ Un seul service applicatif (API + front servi en statique) et un Postgres.
 3. Onglet **Domains** : domaine → service `app`, port `8787`, HTTPS activé.
 4. **Deploy**. Le healthcheck est `/api/health/ready` (base + migrations).
 
-> Alternative : service *Application* (build Dockerfile) + base *Postgres* créée par Dokploy ; alors renseigner `DATABASE_URL`, `APP_URL`, `BOOTSTRAP_TOKEN`, `SMTP_URL`, `MAIL_FROM`, `PORT=8787`.
+> Alternative : service *Application* (build Dockerfile) + base *Postgres* créée par Dokploy ; alors renseigner `DATABASE_URL` (mot de passe encodé en URL) ou `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `APP_URL`, `BOOTSTRAP_TOKEN`, `SMTP_URL`, `MAIL_FROM`, `PORT=8787`.
 
 ## 3. Première installation
 1. Ouvrir `https://maintix.mondomaine.fr/#/setup`.

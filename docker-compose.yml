@@ -8,7 +8,11 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://cabine:${POSTGRES_PASSWORD:?défini dans .env}@db:5432/cabine
+      # connexion à la base par éléments séparés : le mot de passe peut contenir n'importe quel caractère
+      DB_HOST: db
+      DB_USER: cabine
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?défini dans .env}
+      DB_NAME: cabine
       APP_URL: ${APP_URL:?ex. https://maintix.mondomaine.fr}
       BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:?jeton aléatoire pour la première installation}
       SMTP_URL: ${SMTP_URL:-}

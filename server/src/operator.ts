@@ -1,3 +1,4 @@
+import { emailParts } from './emailTemplate'
 import { randomUUID } from 'node:crypto'
 import type { Context, Hono } from 'hono'
 import { z } from 'zod'
@@ -98,7 +99,14 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     await mailer.send({
       to: email,
       subject: `Votre espace Maintix « ${orgName} » est prêt`,
-      text: `Bonjour ${adminName},\n\nVotre espace Maintix « ${orgName} » vient d'être créé et vous en êtes l'administrateur${existingUser ? ' (il s\'ajoute à vos accès existants)' : ''}.\n\nPour vous connecter (lien valable 15 minutes, usage unique) :\n${url}\n\nAu premier accès, une visite guidée vous présente les premières choses à faire : renseigner votre entreprise, inviter votre équipe, importer votre parc d'ascenseurs.\n\nÀ bientôt,\nL'équipe Maintix`,
+      ...emailParts({
+        preheader: `Votre espace « ${orgName} » est prêt.`,
+        title: `Bonjour ${adminName},`,
+        paragraphs: [`Votre espace Maintix vient d'être créé et vous en êtes l'administrateur${existingUser ? ' (il s\'ajoute à vos accès existants)' : ''}.`, 'Au premier accès, une visite guidée vous présente les premières étapes : renseigner votre entreprise, inviter votre équipe, importer votre parc d\'ascenseurs.'],
+        facts: [['Entreprise', orgName], ['Rôle', 'Administrateur'], ['Compte', email]],
+        button: { label: 'Accéder à la plateforme', url },
+        notes: ['Ce lien est valable 15 minutes et ne peut être utilisé qu\'une seule fois.', 'À bientôt, l\'équipe Maintix'],
+      }),
     })
   }
 
@@ -200,7 +208,11 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     await mailer.send({
       to: r.rows[0].email,
       subject: 'Votre demande d\'accès à Maintix',
-      text: `Bonjour ${r.rows[0].contact_name},\n\nNous avons bien étudié la demande d'accès de « ${r.rows[0].company} » à Maintix, et nous ne pouvons pas y donner suite pour le moment.${parsed.data.reason ? `\n\nMotif : ${parsed.data.reason}` : ''}\n\nVous pouvez nous répondre pour en discuter.\n\nL'équipe Maintix`,
+      ...emailParts({
+        title: `Bonjour ${r.rows[0].contact_name},`,
+        paragraphs: [`Nous avons bien étudié la demande d'accès de « ${r.rows[0].company} » à Maintix, et nous ne pouvons pas y donner suite pour le moment.`, ...(parsed.data.reason ? [`Motif : ${parsed.data.reason}`] : []), 'Vous pouvez répondre à nos équipes pour en discuter.'],
+        notes: ['L\'équipe Maintix'],
+      }),
     })
     await audit(NIL, who.userId, 'operator.signup.reject', undefined, pid(c))
     return c.json({ ok: true })
@@ -285,11 +297,26 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
       await mailer.send({
         to: email,
         subject: 'Votre demande d\'accès à Maintix est bien reçue',
-        text: `Bonjour ${name},\n\nNous avons bien reçu la demande d'accès de « ${company} » à Maintix. Nous l'étudions et nous revenons vers vous rapidement : en cas d'accord, vous recevrez un lien de connexion à cette adresse.\n\nL'équipe Maintix`,
+        ...emailParts({
+          preheader: 'Nous étudions votre demande et revenons vers vous rapidement.',
+          title: `Bonjour ${name},`,
+          paragraphs: [`Nous avons bien reçu la demande d'accès de « ${company} » à Maintix.`, 'Nous l\'étudions et revenons vers vous rapidement : en cas d\'accord, vous recevrez un lien de connexion à cette adresse.'],
+          facts: [['Entreprise', company], ['Contact', name]],
+          notes: ['L\'équipe Maintix'],
+        }),
       }).catch(() => {})
       const ops = (await db.query<{ email: string }>('select u.email from operators o join users u on u.id = o.user_id')).rows.map((r) => r.email)
       const targets = [...new Set([...ops, ...config.operatorEmails])]
-      if (targets.length) await mailer.send({ to: targets, subject: `Nouvelle demande d'accès : ${company}`, text: `${name} (${email}${phone ? `, ${phone}` : ''}) demande un accès pour « ${company} ».${message ? `\n\nMessage : ${message}` : ''}\n\nÀ valider dans la console opérateur : ${config.appUrl}/#/operator` }).catch(() => {})
+      if (targets.length) await mailer.send({
+        to: targets,
+        subject: `Nouvelle demande d'accès : ${company}`,
+        ...emailParts({
+          title: 'Nouvelle demande d\'accès',
+          paragraphs: [`${name} demande un accès à Maintix pour « ${company} ».`, ...(message ? [`Message : ${message}`] : [])],
+          facts: [['Entreprise', company], ['Contact', name], ['E-mail', email], ...(phone ? [['Téléphone', phone] as [string, string]] : [])],
+          button: { label: 'Ouvrir la console opérateur', url: `${config.appUrl}/#/operator` },
+        }),
+      }).catch(() => {})
     }
     return c.json({ ok: true }) // même réponse que la demande soit nouvelle, en double ou ignorée
   })

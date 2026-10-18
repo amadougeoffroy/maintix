@@ -18,6 +18,7 @@ import { registerOperatorRoutes, loadOrgs } from './operator'
 import type { Notifier } from './notify'
 import { Metrics, newRequestId, silentLogger, type Logger } from './observability'
 import { totals } from '../../shared/money'
+import { emailParts, ROLE_LABEL } from './emailTemplate'
 import { sealPayload } from '../../shared/canonical'
 
 export interface Deps {
@@ -136,10 +137,25 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
 
   async function sendLoginLink(userId: string, email: string) {
     const token = await createLoginToken(db, userId)
+    const url = `${config.appUrl}/#/auth?token=${token}`
+    const ms = (await db.query<{ full_name: string; role: string; org: string }>(
+      'select m.full_name, m.role, o.name as org from members m join organisations o on o.id = m.org_id where m.user_id = $1 order by m.created_at', [userId],
+    )).rows
+    const first = ms[0]
+    const facts: [string, string][] = [['Compte', email]]
+    if (ms.length === 1) facts.push(['Entreprise', first.org], ['Rôle', ROLE_LABEL[first.role] ?? first.role])
+    else if (ms.length > 1) facts.push(['Entreprises', ms.map((m) => `${m.org} (${ROLE_LABEL[m.role] ?? m.role})`).join('\n')])
     await mailer.send({
       to: email,
       subject: 'Votre lien de connexion Maintix',
-      text: `Bonjour,\n\nCliquez pour vous connecter (valable 15 minutes, usage unique) :\n${config.appUrl}/#/auth?token=${token}\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.`,
+      ...emailParts({
+        preheader: 'Votre lien de connexion, valable 15 minutes.',
+        title: first ? `Bonjour ${first.full_name},` : 'Bonjour,',
+        paragraphs: ['Voici votre lien de connexion sécurisé à Maintix. Un clic suffit, aucun mot de passe à retenir.'],
+        facts,
+        button: { label: 'Accéder à la plateforme', url },
+        notes: ['Ce lien est valable 15 minutes et ne peut être utilisé qu’une seule fois.', 'Si vous n’êtes pas à l’origine de cette demande, ignorez simplement ce message : votre compte reste protégé.'],
+      }),
     })
   }
 
@@ -577,8 +593,14 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     await mailer.send({
       to,
       subject: `Rapport ${out.job.type === 'depannage' ? 'de dépannage' : 'd’entretien'} – ${out.elevator.label} – ${new Date(String(v.finishedAt)).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' })}`,
-      text: `Bonjour,\n\n${parsed.data.message ? parsed.data.message + '\n\n' : ''}${String(v.summary ?? '')}\n\nLe rapport complet est joint à ce message (PDF scellé).\nConsultation en ligne : ${config.appUrl}/#/report/${out.job.id}\n\nCordialement,\n${who.fullName}`,
-      attachments: [{ filename: out.filename, content: out.pdf, contentType: 'application/pdf' }],
+      ...emailParts({
+        preheader: String(v.summary ?? '').slice(0, 110),
+        title: 'Votre rapport d’intervention',
+        paragraphs: ['Bonjour,', ...(parsed.data.message ? [parsed.data.message] : []), String(v.summary ?? ''), 'Le rapport complet est joint à ce message (PDF scellé).'],
+        facts: [['Appareil', String(out.elevator.label)], ['Intervention', out.job.type === 'depannage' ? 'Dépannage' : 'Entretien'], ['Technicien', who.fullName]],
+        button: { label: 'Consulter le rapport en ligne', url: `${config.appUrl}/#/report/${out.job.id}` },
+        notes: [`Cordialement, ${who.fullName}`],
+      }, [{ filename: out.filename, content: out.pdf, contentType: 'application/pdf' }]),
     })
     const sentAt = new Date().toISOString()
     // seule la date d'envoi change : elle est exclue du sceau, la règle d'immuabilité l'autorise
@@ -651,8 +673,13 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     await mailer.send({
       to,
       subject: `Facture ${b.invoice.number} – ${String(b.settings?.legalName ?? 'Maintix')}`,
-      text: `Bonjour,\n\n${parsed.data.message ? parsed.data.message + '\n\n' : ''}Veuillez trouver ci-joint la facture ${b.invoice.number} d'un montant de ${Math.round(t.ttc).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA TTC, à régler avant le ${String(b.invoice.dueAt).split('-').reverse().join('/')}.\n\nCordialement,\n${who.fullName}`,
-      attachments: [{ filename: `${b.invoice.number}.pdf`, content: pdf, contentType: 'application/pdf' }],
+      ...emailParts({
+        preheader: `Facture ${b.invoice.number} à régler avant le ${String(b.invoice.dueAt).split('-').reverse().join('/')}`,
+        title: `Facture ${b.invoice.number}`,
+        paragraphs: ['Bonjour,', ...(parsed.data.message ? [parsed.data.message] : []), 'Veuillez trouver ci-joint votre facture au format PDF.'],
+        facts: [['Montant TTC', `${Math.round(t.ttc).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA`], ['À régler avant le', String(b.invoice.dueAt).split('-').reverse().join('/')], ['Émetteur', String(b.settings?.legalName ?? 'Maintix')]],
+        notes: [`Cordialement, ${who.fullName}`],
+      }, [{ filename: `${b.invoice.number}.pdf`, content: pdf, contentType: 'application/pdf' }]),
     })
     await audit(who.orgId, who.userId, 'invoice.send', 'invoices', String(b.invoice.id), { to })
     return c.json({ ok: true, to })

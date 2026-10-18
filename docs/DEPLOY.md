@@ -34,6 +34,13 @@ Un seul service applicatif (API + front servi en statique) et un Postgres.
 5. Chaque technicien : *Profil → Alertes d'astreinte* → activer les notifications (sur iPhone : ajouter d'abord Maintix à l'écran d'accueil, iOS 16.4+) et saisir son numéro pour les SMS.
 6. Recommandé : retirer `BOOTSTRAP_TOKEN` ensuite (l'installation est de toute façon refusée dès qu'une organisation existe).
 
+### Pas de lien reçu (SMTP absent ou en panne) : générer un lien depuis le serveur
+Sur le serveur Dokploy (terminal SSH), sans passer par les journaux ni par l'e-mail :
+```bash
+docker exec $(docker ps -qf name=app) node dist/cli.js login-link vous@exemple.fr
+```
+La commande affiche un lien valable 15 minutes, à usage unique, pour un membre existant. Dans Dokploy, le même terminal est disponible depuis le service, onglet **Terminal** (conteneur `app`) : lancer alors simplement `node dist/cli.js login-link vous@exemple.fr`.
+
 ## 4. Exploitation
 - **Sauvegardes** : planifier la sauvegarde de Postgres et tester la restauration (commandes dans [OPERATIONS.md](OPERATIONS.md)).
 - **Mises à jour** : redéployer ; les migrations SQL (`server/migrations`) s'appliquent au démarrage, dans une transaction.

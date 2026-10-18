@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsup src/index.ts --format esm --target node22 --out-dir dist --clean --external pg --external nodemailer --external hono --external @hono/node-server --external zod --external @electric-sql/pglite",
+    "build": "tsup src/index.ts src/cli.ts --format esm --target node22 --out-dir dist --clean --external pg --external nodemailer --external hono --external @hono/node-server --external zod --external @electric-sql/pglite",
     "start": "node dist/index.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

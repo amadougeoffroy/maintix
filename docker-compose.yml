@@ -1,5 +1,5 @@
-# Déploiement Dokploy (type « Docker Compose ») ou local : `docker compose up -d --build`.
-# Variables : voir .env.example. Le domaine public est routé par Dokploy vers le service `app` (port 8787).
+# Déploiement Dokploy (type « Docker Compose »). Variables : voir .env.example.
+# Le domaine public est routé par Dokploy vers le service `app` (port 8787).
 services:
   app:
     build: .
@@ -31,8 +31,10 @@ services:
       ERROR_WEBHOOK_URL: ${ERROR_WEBHOOK_URL:-}
       APP_VERSION: ${APP_VERSION:-}
       MAIL_OUTBOX_FILE: ${MAIL_OUTBOX_FILE:-}
-    ports:
-      - "${HOST_PORT:-8787}:8787"
+    # Pas de « ports » : Dokploy (Traefik) route le domaine vers le conteneur, le port 8787 n'est donc pas exposé sur Internet.
+    # En local : docker compose -f docker-compose.yml -f docker-compose.local.yml up
+    expose:
+      - "8787"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8787/api/health/ready || exit 1"]
       interval: 30s

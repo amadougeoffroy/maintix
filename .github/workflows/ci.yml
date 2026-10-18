@@ -94,9 +94,9 @@ jobs:
         run: |
           cp .env.example .env
           sed -i 's#^APP_URL=.*#APP_URL=http://localhost:8787#; s#^POSTGRES_PASSWORD=.*#POSTGRES_PASSWORD=ci-password#; s#^BOOTSTRAP_TOKEN=.*#BOOTSTRAP_TOKEN=ci-token#' .env
-          docker compose up -d --build
+          docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
           for i in $(seq 1 40); do curl -sf localhost:8787/api/health/ready && break; sleep 2; done
           curl -sf localhost:8787/api/health/ready
           curl -sf localhost:8787/ | grep -q "Maintix"
-          docker compose logs app | tail -20
-          docker compose down -v
+          docker compose -f docker-compose.yml -f docker-compose.local.yml logs app | tail -20
+          docker compose -f docker-compose.yml -f docker-compose.local.yml down -v

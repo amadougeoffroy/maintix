@@ -4,7 +4,7 @@ import { Badge, Health, SeverityBadge } from '../../components/ui'
 import { contractStatus, STATUS_LABEL as C_LABEL } from '../../contracts'
 import { clientStats } from '../../stats'
 import { STATUS_LABEL as I_LABEL, totals } from '../../invoicing'
-import { eur, fmtDate, today } from '../../util'
+import { fcfa, fmtDate, today } from '../../util'
 
 export default function ClientDashboard() {
   const { id } = useParams()
@@ -31,8 +31,8 @@ export default function ClientDashboard() {
         {kpi('Pannes (12 mois)', String(st.breakdowns12m), st.breakdowns12m > 4 ? 'warn' : undefined)}
         {kpi('Délai moyen de réparation', st.mttrHours === null ? '—' : `${st.mttrHours} h`)}
         {kpi('Visites réalisées (12 mois)', String(st.visits12m), st.lateVisits ? 'warn' : undefined)}
-        {kpi('CA récurrent annuel', eur(st.annualRevenue))}
-        {kpi('À encaisser', eur(st.outstanding), st.overdueInvoices ? 'bad' : undefined)}
+        {kpi('CA récurrent annuel', fcfa(st.annualRevenue))}
+        {kpi('À encaisser', fcfa(st.outstanding), st.overdueInvoices ? 'bad' : undefined)}
       </div>
 
       <section className="card stack">
@@ -58,12 +58,12 @@ export default function ClientDashboard() {
       <div className="grid2">
         <section className="stack">
           <h2>Contrats</h2>
-          {contracts.map((k) => <Link key={k.id} to="/office/contracts" className="card link row between"><span>{eur(k.priceMonthly)}/mois · {k.elevatorIds.length} appareil(s)</span><Badge tone={contractStatus(k, on) === 'actif' ? 'ok' : contractStatus(k, on) === 'resilie' ? undefined : 'warn'}>{C_LABEL[contractStatus(k, on)]}</Badge></Link>)}
+          {contracts.map((k) => <Link key={k.id} to="/office/contracts" className="card link row between"><span>{fcfa(k.priceMonthly)}/mois · {k.elevatorIds.length} appareil(s)</span><Badge tone={contractStatus(k, on) === 'actif' ? 'ok' : contractStatus(k, on) === 'resilie' ? undefined : 'warn'}>{C_LABEL[contractStatus(k, on)]}</Badge></Link>)}
           {contracts.length === 0 && <p className="muted">Aucun contrat.</p>}
         </section>
         <section className="stack">
           <h2>Dernières factures</h2>
-          {invoices.map((i) => <Link key={i.id} to={`/office/invoices/${i.id}`} className="card link row between"><span><strong>{i.number}</strong> <span className="small muted">{fmtDate(i.issuedAt!)}</span></span><span className="row"><strong>{eur(totals(i).ttc)}</strong><Badge tone={i.status === 'payee' ? 'ok' : i.status === 'annulee' ? 'bad' : i.dueAt! < on ? 'bad' : 'brand'}>{i.status === 'emise' && i.dueAt! < on ? 'En retard' : I_LABEL[i.status]}</Badge></span></Link>)}
+          {invoices.map((i) => <Link key={i.id} to={`/office/invoices/${i.id}`} className="card link row between"><span><strong>{i.number}</strong> <span className="small muted">{fmtDate(i.issuedAt!)}</span></span><span className="row"><strong>{fcfa(totals(i).ttc)}</strong><Badge tone={i.status === 'payee' ? 'ok' : i.status === 'annulee' ? 'bad' : i.dueAt! < on ? 'bad' : 'brand'}>{i.status === 'emise' && i.dueAt! < on ? 'En retard' : I_LABEL[i.status]}</Badge></span></Link>)}
           {invoices.length === 0 && <p className="muted">Aucune facture.</p>}
         </section>
       </div>

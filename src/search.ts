@@ -39,14 +39,14 @@ export function search(s: State, query: string, perKind = 6): SearchHit[] {
     const st = site(e.siteId)
     add('appareil', e.id, e.label, `${e.brand} ${e.model} · n° ${e.serial} · ${st?.name ?? ''}`, `/office/elevator/${e.id}`, rank(e.label, e.brand, e.model, e.serial, st?.name, st?.address, client(st?.clientId ?? '')?.name))
   }
-  for (const k of s.contracts) add('contrat', k.id, `Contrat ${client(k.clientId)?.name ?? ''}`, `${k.priceMonthly} €/mois · ${k.elevatorIds.length} appareil(s)`, '/office/contracts', rank(client(k.clientId)?.name, 'contrat', ...k.elevatorIds.map((id) => elevator(id)?.label)))
+  for (const k of s.contracts) add('contrat', k.id, `Contrat ${client(k.clientId)?.name ?? ''}`, `${k.priceMonthly} FCFA/mois · ${k.elevatorIds.length} appareil(s)`, '/office/contracts', rank(client(k.clientId)?.name, 'contrat', ...k.elevatorIds.map((id) => elevator(id)?.label)))
   for (const d of s.defects) add('defaut', d.id, d.title, `${d.severity} · ${elevator(d.elevatorId)?.label ?? ''} · ${d.status}`, '/office/defects', rank(d.title, d.severity, elevator(d.elevatorId)?.label))
   for (const j of s.jobs) {
     if (j.status !== 'terminee' && j.type !== 'depannage') continue
     const e = elevator(j.elevatorId)
     add('rapport', j.id, `${j.type === 'depannage' ? 'Dépannage' : 'Rapport'} · ${e?.label ?? ''}`, (j.visit?.summary ?? j.description ?? '').slice(0, 110), j.status === 'terminee' ? `/report/${j.id}` : '/office', rank(e?.label, j.description, j.visit?.summary, j.visit?.notes, j.reporter))
   }
-  for (const i of s.invoices) add('facture', i.id, i.number ?? 'Brouillon de facture', `${client(i.clientId)?.name ?? ''} · ${totals(i).ttc.toFixed(2)} € TTC`, `/office/invoices/${i.id}`, rank(i.number, client(i.clientId)?.name, ...i.lines.map((l) => l.label)))
+  for (const i of s.invoices) add('facture', i.id, i.number ?? 'Brouillon de facture', `${client(i.clientId)?.name ?? ''} · ${Math.round(totals(i).ttc)} FCFA TTC`, `/office/invoices/${i.id}`, rank(i.number, client(i.clientId)?.name, ...i.lines.map((l) => l.label)))
   for (const q of s.quotes) add('devis', q.id, `Devis · ${elevator(q.elevatorId)?.label ?? ''}`, client(q.clientId)?.name ?? '', '/office/quotes', rank(client(q.clientId)?.name, elevator(q.elevatorId)?.label, ...q.lines.map((l) => l.label)))
 
   const out: SearchHit[] = []

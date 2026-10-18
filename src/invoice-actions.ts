@@ -14,9 +14,9 @@ export async function issueInvoice(id: string): Promise<{ ok: true } | { ok: fal
     applyRemoteDocs([{ collection: 'invoices', id, data: r.invoice, deleted: false }])
     return { ok: true }
   } catch (e) {
-    if (e instanceof ApiError) return { ok: false, error: e.code === 'already_issued' ? 'Cette facture est déjà émise.' : e.code === 'empty' ? 'Facture vide ou à 0 €.' : 'Émission refusée par le serveur.' }
+    if (e instanceof ApiError) return { ok: false, error: e.code === 'already_issued' ? 'Cette facture est déjà émise.' : e.code === 'empty' ? 'Facture vide ou à 0 FCFA.' : 'Émission refusée par le serveur.' }
     if (e instanceof Error && e.message === 'offline') return { ok: false, error: 'Hors ligne : l’émission nécessite le serveur (numéro de facture unique).' }
-    return { ok: false, error: e instanceof Error && e.message === 'Facture vide' ? 'Facture vide ou à 0 €.' : 'Émission impossible.' }
+    return { ok: false, error: e instanceof Error && e.message === 'Facture vide' ? 'Facture vide ou à 0 FCFA.' : 'Émission impossible.' }
   }
 }
 

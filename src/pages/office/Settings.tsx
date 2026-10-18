@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
+import { Navigate, NavLink, useParams } from 'react-router-dom'
+import { Bell, Building2, LifeBuoy, Users as UsersIcon } from 'lucide-react'
 import { api, ApiError, type Member } from '../../api'
 import { actions, certStatus, runtime, useData } from '../../store'
 import type { OrgSettings } from '../../types'
 import { OrgSwitcher } from '../../components/OrgSwitcher'
+import { PlanCard } from '../../components/PlanCard'
 import { feedback } from '../../feedback'
 import { patchOnboarding, useOnboarding } from '../../onboarding'
 import { NotificationSettings } from '../../components/NotificationSettings'
@@ -48,7 +51,7 @@ function Users() {
 
 function OrgForm() {
   const s = useData()
-  const base: OrgSettings = { id: 'org', legalName: '', address: '', siret: '', vatNumber: '', iban: '', email: '', phone: '', legalFooter: 'En cas de retard de paiement : pénalités au taux de 3 fois le taux d’intérêt légal et indemnité forfaitaire de recouvrement de 40 €.', paymentDays: 30, vatRate: 20 }
+  const base: OrgSettings = { id: 'org', legalName: '', address: '', siret: '', vatNumber: '', iban: '', email: '', phone: '', legalFooter: 'En cas de retard de paiement : pénalités de retard exigibles dès le lendemain de l’échéance et indemnité forfaitaire de recouvrement.', paymentDays: 30, vatRate: 20 }
   const [f, setF] = useState<OrgSettings>(s.settings[0] ?? base)
   const [saved, setSaved] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -95,41 +98,80 @@ function Help() {
   )
 }
 
-export default function Settings() {
+const TABS = [
+  ['entreprise', 'Entreprise', Building2],
+  ['equipe', 'Équipe', UsersIcon],
+  ['alertes', 'Alertes', Bell],
+  ['aide', 'Aide et données', LifeBuoy],
+] as const
+type TabKey = (typeof TABS)[number][0]
+
+function Team() {
   const s = useData()
   const [label, setLabel] = useState('')
   const [exp, setExp] = useState('')
   const [tech, setTech] = useState(s.techs.find((t) => t.role === 'tech')?.id ?? '')
   return (
     <div className="stack-lg">
-      <h1>Réglages</h1>
-      <NotificationSettings />
-      <OrgSwitcher />
-      <OrgForm />
-      <Help />
+      {runtime.server && <Users />}
       <section className="stack">
-        <h2>Équipe & habilitations</h2>
+        <h2>Habilitations des techniciens</h2>
+        <p className="muted small">Un technicien dont une habilitation est expirée ne peut plus être affecté à une mission.</p>
+        {s.techs.filter((t) => t.role === 'tech').length === 0 && <p className="muted">Aucun technicien pour le moment.</p>}
         {s.techs.filter((t) => t.role === 'tech').map((t) => (
           <div key={t.id} className="card stack">
             <div className="row between"><strong>{t.name}</strong><Badge tone={certStatus(t).ok ? 'ok' : 'bad'}>{certStatus(t).ok ? 'Habilité' : 'Non affectable'}</Badge></div>
             {t.certs.map((c) => <div key={c.label} className="row between small"><span>{c.label}</span><span style={{ color: c.expires < today() ? 'var(--bad)' : undefined }}>{c.expires < today() ? 'Expirée le ' : 'Jusqu’au '}{fmtDateLong(c.expires)}</span></div>)}
           </div>
         ))}
-        <form className="card stack" onSubmit={(e) => { e.preventDefault(); actions.addCert(tech, label, exp); setLabel(''); setExp('') }}>
-          <h3>Ajouter / renouveler une habilitation</h3>
-          <select aria-label="Technicien" value={tech} onChange={(e) => setTech(e.target.value)}>{s.techs.filter((t) => t.role === 'tech').map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-          <input aria-label="Intitulé de l’habilitation" required value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Habilitation électrique B2V" />
-          <input aria-label="Date d’expiration" required type="date" value={exp} onChange={(e) => setExp(e.target.value)} />
-          <button className="btn">Ajouter</button>
-        </form>
+        {s.techs.some((t) => t.role === 'tech') && (
+          <form className="card stack" onSubmit={(e) => { e.preventDefault(); actions.addCert(tech, label, exp); setLabel(''); setExp(''); feedback.toast('Habilitation enregistrée.') }}>
+            <h3>Ajouter / renouveler une habilitation</h3>
+            <select aria-label="Technicien" value={tech} onChange={(e) => setTech(e.target.value)}>{s.techs.filter((t) => t.role === 'tech').map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+            <input aria-label="Intitulé de l’habilitation" required value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Habilitation électrique B2V" />
+            <input aria-label="Date d’expiration" required type="date" value={exp} onChange={(e) => setExp(e.target.value)} />
+            <button className="btn">Ajouter</button>
+          </form>
+        )}
       </section>
-      {runtime.server && <Users />}
-      <section className="stack">
-        <h2>Données</h2>
-        {runtime.server && s.elevators.length === 0 && <button className="btn" onClick={() => actions.loadDemo()}>Charger des données de démonstration</button>}
-        <p className="muted small">{runtime.server ? 'Les données sont synchronisées avec le serveur et disponibles hors ligne sur cet appareil.' : 'Mode démonstration : données stockées sur cet appareil uniquement.'}</p>
-        {!runtime.server && <button className="btn danger" onClick={() => { if (confirm('Réinitialiser les données de démonstration ?')) actions.resetDemo() }}>Réinitialiser la démo</button>}
-      </section>
+    </div>
+  )
+}
+
+function Data() {
+  const s = useData()
+  return (
+    <section className="stack">
+      <h2>Données</h2>
+      {runtime.server && s.elevators.length === 0 && (
+        <div className="card stack">
+          <p className="small muted">Votre entreprise est vide. Pour essayer Maintix sans saisir vos données, vous pouvez charger des clients, appareils et missions d’exemple (à ne pas utiliser pour une entreprise réelle).</p>
+          <div><button className="btn" onClick={() => actions.loadDemo()}>Charger des données de démonstration</button></div>
+        </div>
+      )}
+      <p className="muted small">{runtime.server ? 'Les données sont synchronisées avec le serveur et disponibles hors ligne sur cet appareil.' : 'Mode démonstration : données stockées sur cet appareil uniquement.'}</p>
+      {!runtime.server && <div><button className="btn danger" onClick={() => { if (confirm('Réinitialiser les données de démonstration ?')) actions.resetDemo() }}>Réinitialiser la démo</button></div>}
+    </section>
+  )
+}
+
+/** Réglages : une section par onglet (adresse propre à chaque onglet : /office/settings/equipe, etc.). */
+export default function Settings() {
+  const { tab } = useParams()
+  if (!TABS.some(([k]) => k === tab)) return <Navigate to="/office/settings/entreprise" replace />
+  const current = tab as TabKey
+  return (
+    <div className="stack-lg">
+      <h1>Réglages</h1>
+      <nav className="subtabs" aria-label="Sections des réglages">
+        {TABS.map(([k, label, Icon]) => (
+          <NavLink key={k} to={`/office/settings/${k}`} className={({ isActive }) => `subtab ${isActive ? 'on' : ''}`}><Icon size={18} aria-hidden="true" />{label}</NavLink>
+        ))}
+      </nav>
+      {current === 'entreprise' && (<><OrgSwitcher /><PlanCard /><OrgForm /></>)}
+      {current === 'equipe' && <Team />}
+      {current === 'alertes' && <NotificationSettings />}
+      {current === 'aide' && (<><Help /><Data /></>)}
     </div>
   )
 }

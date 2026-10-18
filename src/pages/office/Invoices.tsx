@@ -6,7 +6,7 @@ import { Icon } from '../../components/Icon'
 import { contractStatus } from '../../contracts'
 import { draftFromContract, draftFromQuote, fec, salesJournalCsv, STATUS_LABEL, totals, unbilledPeriods } from '../../invoicing'
 import { issueInvoice } from '../../invoice-actions'
-import { eur, fmtDate, today, uid } from '../../util'
+import { fcfa, fmtDate, today, uid } from '../../util'
 import type { Invoice } from '../../types'
 
 const TONE = { brouillon: undefined, emise: 'brand', payee: 'ok', annulee: 'bad' } as const
@@ -40,7 +40,7 @@ export default function Invoices() {
   return (
     <div className="stack-lg">
       <div className="row between wrap">
-        <div><h1>Factures</h1><p className="muted">À encaisser : <strong>{eur(outstanding)}</strong>{overdue.length > 0 && <> · <span style={{ color: 'var(--bad)', fontWeight: 700 }}>{overdue.length} en retard</span></>}</p></div>
+        <div><h1>Factures</h1><p className="muted">À encaisser : <strong>{fcfa(outstanding)}</strong>{overdue.length > 0 && <> · <span style={{ color: 'var(--bad)', fontWeight: 700 }}>{overdue.length} en retard</span></>}</p></div>
         <button className="btn primary" onClick={() => { const f: Invoice = { id: uid('f'), clientId: s.clients[0]?.id ?? '', kind: 'libre', lines: [{ label: '', qty: 1, unit: 0 }], vatRate: vat, status: 'brouillon', createdAt: on }; actions.upsertInvoice(f); nav(`/office/invoices/${f.id}`) }} disabled={!s.clients.length}>+ Facture</button>
       </div>
       {msg && <div className="card alert" role="alert">{msg}</div>}
@@ -50,7 +50,7 @@ export default function Invoices() {
           <h2>À facturer</h2>
           {toBill.map(({ c, periods }) => (
             <div key={c.id} className="row between wrap">
-              <span><strong>{byId(s.clients, c.clientId)?.name}</strong> <span className="muted small">{periods.length} mois non facturé(s) · {eur(c.priceMonthly)}/mois</span></span>
+              <span><strong>{byId(s.clients, c.clientId)?.name}</strong> <span className="muted small">{periods.length} mois non facturé(s) · {fcfa(c.priceMonthly)}/mois</span></span>
               <button className="btn sm" onClick={() => { periods.forEach((p) => actions.upsertInvoice(draftFromContract(c, p, 1, c.elevatorIds.length, vat, on))); setFilter('brouillon') }}><Icon n="file" /> Créer {periods.length} brouillon(s)</button>
             </div>
           ))}
@@ -77,7 +77,7 @@ export default function Invoices() {
               <td>{byId(s.clients, i.clientId)?.name}</td>
               <td>{i.issuedAt ? fmtDate(i.issuedAt) : '—'}</td>
               <td style={i.status === 'emise' && i.dueAt && i.dueAt < on ? { color: 'var(--bad)', fontWeight: 700 } : undefined}>{i.dueAt ? fmtDate(i.dueAt) : '—'}</td>
-              <td style={{ textAlign: 'right' }}>{eur(totals(i).ttc)}</td>
+              <td style={{ textAlign: 'right' }}>{fcfa(totals(i).ttc)}</td>
               <td><Badge tone={TONE[i.status]}>{STATUS_LABEL[i.status]}</Badge></td>
               <td>
                 {i.status === 'brouillon' && <button className="btn sm primary" onClick={async () => { const r = await issueInvoice(i.id); setMsg(r.ok ? '' : r.error) }}>Émettre</button>}

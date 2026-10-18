@@ -40,7 +40,7 @@ export const STATUS_LABEL: Record<ContractStatus, string> = {
 /** Prochaine date d'indexation (anniversaire de la dernière indexation, ou du début). */
 export const nextIndexation = (c: Contract) => addMonths(c.lastIndexed ?? c.start, 12)
 export const indexationDue = (c: Contract, on = today()) => !c.terminatedAt && nextIndexation(c) <= addMonths(on, 1) && c.indexation > 0
-export const indexedPrice = (c: Contract) => Math.round(c.priceMonthly * (1 + c.indexation / 100) * 100) / 100
+export const indexedPrice = (c: Contract) => Math.round(c.priceMonthly * (1 + c.indexation / 100))
 
 /** Applique l'indexation annuelle et historise l'ancien prix. */
 export function applyIndexation(c: Contract, on = today()): Contract {

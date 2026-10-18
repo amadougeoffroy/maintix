@@ -56,7 +56,7 @@ export function unbilledPeriods(c: Contract, invoices: Invoice[], on = today()):
 }
 
 /* ---------- exports comptables ---------- */
-const fr = (n: number) => n.toFixed(2).replace('.', ',')
+const fr = (n: number) => String(Math.round(n)) // pas de centimes en FCFA
 const ymd = (d: string) => d.replaceAll('-', '')
 const csvCell = (v: string | number) => { const s = String(v); return /[;"\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s }
 

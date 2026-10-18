@@ -20,10 +20,28 @@ async function call<T>(method: string, path: string, body?: unknown, headers: Re
 export interface SessionInfo {
   user: { id: string; email: string }
   org: { id: string; name: string }
+  operator?: boolean
+  orgStatus?: 'active' | 'suspended'
+  suspendedReason?: string | null
   role: 'admin' | 'bureau' | 'tech' | 'client'
   fullName: string
   techId: string | null
   clientId: string | null
+}
+export interface Offer { plan: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialEndsOn: string | null; notes: string }
+export interface OrgUsage { techs: number; elevators: number; clients: number; jobs30: number; members: number }
+export interface OperatorOrg {
+  id: string; name: string; status: 'active' | 'suspended'; suspendedReason: string | null; createdAt: string
+  offer: Offer; usage: OrgUsage; lastActivity: string | null; lastLogin: string | null
+  estimate: { base: number; overTechs: number; overElevators: number; amount: number }
+  flags: { overTechs: boolean; overElevators: boolean; trialExpired: boolean }
+}
+export interface PlanPreset { code: string; name: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialDays?: number }
+export interface SignupRequest { id: string; company: string; contactName: string; email: string; phone: string | null; message: string | null; status: 'pending' | 'approved' | 'rejected'; createdAt: string; decidedAt: string | null; decisionReason: string | null; orgId: string | null }
+export interface BillingView {
+  month: string; currency: 'FCFA'; totalEstimate: number
+  live: { orgId: string; name: string; status: string; plan: string; usage: OrgUsage; estimate: OperatorOrg['estimate']; flags: OperatorOrg['flags'] }[]
+  frozen: { orgId: string; plan: string; techs: number; elevators: number; clients: number; jobs: number; amount: number; frozenAt: string }[]
 }
 export interface Member {
   userId: string
@@ -99,6 +117,22 @@ export const api = {
   testNotification: () => call<{ ok: true; push: number; sms: boolean }>('POST', '/notifications/test', {}),
   onboarding: () => call<{ onboarding: Record<string, boolean> }>('GET', '/me/onboarding'),
   setOnboarding: (patch: Record<string, boolean | undefined>) => call<{ onboarding: Record<string, boolean> }>('POST', '/me/onboarding', patch),
+  /* console opérateur */
+  opOverview: () => call<{ orgs: OperatorOrg[]; pendingSignups: number; plans: PlanPreset[] }>('GET', '/operator/overview'),
+  opCreateOrg: (b: { name: string; adminName: string; adminEmail: string; plan: string }) => call<{ ok: true; orgId: string }>('POST', '/operator/orgs', b),
+  opOffer: (id: string, b: Omit<Offer, 'notes' | 'trialEndsOn'> & { trialEndsOn: string | null; notes: string }) => call<{ ok: true; org: OperatorOrg }>('POST', `/operator/orgs/${id}/offer`, b),
+  opSuspend: (id: string, reason: string) => call<{ ok: true }>('POST', `/operator/orgs/${id}/suspend`, { reason }),
+  opReactivate: (id: string) => call<{ ok: true }>('POST', `/operator/orgs/${id}/reactivate`, {}),
+  opSignups: (status?: string) => call<{ signups: SignupRequest[] }>('GET', `/operator/signups${status ? `?status=${status}` : ''}`),
+  opApprove: (id: string, plan: string) => call<{ ok: true; orgId: string }>('POST', `/operator/signups/${id}/approve`, { plan }),
+  opReject: (id: string, reason: string) => call<{ ok: true }>('POST', `/operator/signups/${id}/reject`, { reason }),
+  opBilling: (month: string) => call<BillingView>('GET', `/operator/billing?month=${month}`),
+  opFreeze: (month: string) => call<{ ok: true; frozen: number }>('POST', '/operator/billing/freeze', { month }),
+  opOperators: () => call<{ operators: { userId: string; email: string; createdAt: string }[]; fromEnv: string[] }>('GET', '/operator/operators'),
+  opAddOperator: (email: string) => call<{ ok: true }>('POST', '/operator/operators', { email }),
+  opRemoveOperator: (id: string) => call<{ ok: true }>('DELETE', `/operator/operators/${id}`, {}),
+  orgPlan: () => call<{ status: string; offer: Offer; usage: OrgUsage; flags: OperatorOrg['flags']; estimate: OperatorOrg['estimate'] }>('GET', '/org/plan'),
+  signup: (b: { company: string; name: string; email: string; phone?: string; message?: string; website?: string }) => call<{ ok: true }>('POST', '/public/signup', b),
   report: (b: { elevatorId: string; description: string; trapped: boolean; reporter: string }) => call<{ ok: true; jobId: string }>('POST', '/public/report', b),
   status: (id: string) => call<{ label: string; siteName: string; status: string; lastVisit: string | null; job: { status: string; createdAt: string; timeline: { at: string; label: string }[] } | null }>('GET', `/public/status/${encodeURIComponent(id)}`),
 }

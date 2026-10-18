@@ -77,3 +77,10 @@ export function closedJob(overrides: Record<string, unknown> = {}) {
   return job as typeof job & { visit: Record<string, unknown> }
 }
 export const newId = () => randomUUID()
+
+/** Crée une entreprise via la console opérateur ; `a` doit être un opérateur (le compte d'installation l'est). */
+export async function createOrg(a: ReturnType<typeof api>, name: string, adminEmail: string, adminName = 'Admin Client', plan = 'essai') {
+  const r = await a.post('/api/operator/orgs', { name, adminName, adminEmail, plan })
+  if (r.status !== 201) throw new Error(`createOrg ${r.status} ${await r.text()}`)
+  return (await r.json()).orgId as string
+}

@@ -11,6 +11,9 @@ export const toSession = (i: SessionInfo): State['session'] => ({
   isAdmin: i.role === 'admin',
   fullName: i.fullName,
   orgName: i.org.name,
+  operator: !!i.operator,
+  orgStatus: i.orgStatus ?? 'active',
+  suspendedReason: i.suspendedReason ?? null,
 })
 
 const USER_KEY = 'cabine-user'

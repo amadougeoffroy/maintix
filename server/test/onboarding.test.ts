@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { api, bootstrap, invite, makeEnv, type Env } from './helpers'
+import { api, bootstrap, createOrg, invite, makeEnv, type Env } from './helpers'
 
 let env: Env
 let admin: ReturnType<typeof api>
@@ -27,7 +27,7 @@ describe('didacticiel', () => {
     await admin.post('/api/me/onboarding', { welcomeSeen: true })
     const tech = api(env, await invite(env, admin, 'tech@x.test', 'tech'))
     expect(await get(tech)).toEqual({}) // un autre membre n'a rien vu
-    const { orgId } = await (await admin.post('/api/orgs', { name: 'Seconde' })).json()
+    const orgId = await createOrg(admin, 'Seconde', 'admin@acme.test')
     await admin.post('/api/auth/switch-org', { orgId })
     expect(await get(admin)).toEqual({}) // même personne, autre entreprise : didacticiel à refaire
   })

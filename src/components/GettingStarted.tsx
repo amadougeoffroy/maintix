@@ -19,7 +19,7 @@ export function GettingStarted() {
         <div className="row"><span className="badge brand">{done}/{steps.length}</span><button className="btn sm" onClick={() => patchOnboarding({ gettingStartedHidden: true })}>{all ? 'Terminer' : 'Masquer'}</button></div>
       </div>
       <div className="progress" role="progressbar" aria-label="Avancement des premiers pas" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={done}><div style={{ width: `${(done / steps.length) * 100}%` }} /></div>
-      {all && <p className="muted">Votre espace est configuré. Vous pouvez masquer cette liste ; elle reste disponible dans Réglages → Aide.</p>}
+      {all && <p className="muted">Votre espace est configuré. Vous pouvez masquer cette liste ; elle reste disponible dans Réglages → Aide et données.</p>}
       <ol className="gs-list">
         {steps.map((st) => (
           <li key={st.key} className={`${st.done ? 'done' : ''} ${next?.key === st.key ? 'next' : ''}`}>

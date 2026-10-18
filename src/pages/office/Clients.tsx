@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { actions, byId, useData } from '../../store'
 import { Badge } from '../../components/ui'
-import { eur, today, uid } from '../../util'
+import { fcfa, today, uid } from '../../util'
 import type { Client, ClientKind, Contract, Site } from '../../types'
 import { Icon } from '../../components/Icon'
 
@@ -73,7 +73,7 @@ export default function Clients() {
             <div className="stack">
               {contracts.map((k) => (
                 <div key={k.id} className="row between wrap" style={{ borderTop: '1px solid var(--line)', paddingTop: 8 }}>
-                  <span className="row"><Icon n="file" /> {k.elevatorIds.length} appareil(s) · tous les {k.periodicityMonths} mois · {eur(k.priceMonthly)}/mois</span>
+                  <span className="row"><Icon n="file" /> {k.elevatorIds.length} appareil(s) · tous les {k.periodicityMonths} mois · {fcfa(k.priceMonthly)}/mois</span>
                   <div className="row"><button className="btn sm" onClick={() => setContract(k)}>Modifier</button><button className="btn sm" onClick={() => actions.deleteContract(k.id)}>Supprimer</button></div>
                 </div>
               ))}
@@ -104,7 +104,7 @@ function ContractForm({ contract, onChange }: { contract: Contract; onChange: (c
       </fieldset>
       <div className="grid2">
         <label className="field">Périodicité (mois)<input type="number" min={1} max={12} value={contract.periodicityMonths} onChange={(e) => onChange({ ...contract, periodicityMonths: +e.target.value || 1 })} /></label>
-        <label className="field">Prix mensuel HT (€)<input type="number" min={0} value={contract.priceMonthly} onChange={(e) => onChange({ ...contract, priceMonthly: +e.target.value || 0 })} /></label>
+        <label className="field">Prix mensuel HT (FCFA)<input type="number" min={0} value={contract.priceMonthly} onChange={(e) => onChange({ ...contract, priceMonthly: +e.target.value || 0 })} /></label>
         <label className="field">Début<input type="date" value={contract.start} onChange={(e) => onChange({ ...contract, start: e.target.value })} /></label>
         <label className="field">Indexation annuelle (%)<input type="number" step="0.1" value={contract.indexation} onChange={(e) => onChange({ ...contract, indexation: +e.target.value || 0 })} /></label>
         <label className="field">Durée d’un terme (mois)<input type="number" min={1} max={120} value={contract.termMonths ?? 12} onChange={(e) => onChange({ ...contract, termMonths: +e.target.value || 12 })} /></label>

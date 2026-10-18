@@ -181,7 +181,7 @@ Comptes/organisations · parc · QR · visites planifiées · checklist par zone
 
 ## 10. Modèle économique
 
-- **Abonnement par technicien actif** (ordre de grandeur 30–50 €/mois), possible palier par nombre d'appareils.
+- **Abonnement par technicien actif** (ordre de grandeur 20 000 – 33 000 FCFA par mois), possible palier par nombre d'appareils.
 - Essai 30 jours, **import du parc offert** (principale friction).
 - Options : portail client en marque blanche, module devis/facturation, astreinte avancée, API.
 - Distribution : réseaux d'indépendants du secteur, syndicats professionnels, salons, formation, relations avec des cabinets de syndics (ils exigent la transparence et poussent leurs prestataires à s'équiper).

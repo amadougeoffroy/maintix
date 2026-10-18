@@ -12,10 +12,18 @@ export async function loginLinkFor(db: Db, appUrl: string, email: string): Promi
   return `${appUrl.replace(/\/$/, '')}/#/auth?token=${await createLoginToken(db, u.rows[0].id)}`
 }
 
+/** Donne l'accès à la console opérateur à un utilisateur existant. */
+export async function makeOperator(db: Db, email: string): Promise<boolean> {
+  const u = await db.query<{ id: string }>('select id from users where email = $1', [email.trim().toLowerCase()])
+  if (!u.rows[0]) return false
+  await db.query('insert into operators (user_id) values ($1) on conflict do nothing', [u.rows[0].id])
+  return true
+}
+
 async function main() {
   const [cmd, email] = process.argv.slice(2)
-  if (cmd !== 'login-link' || !email) {
-    console.error('Usage : node dist/cli.js login-link <adresse e-mail>')
+  if (!['login-link', 'operator-add'].includes(cmd) || !email) {
+    console.error('Usage : node dist/cli.js login-link <e-mail>   |   node dist/cli.js operator-add <e-mail>')
     process.exit(2)
   }
   const config = loadConfig()
@@ -25,6 +33,12 @@ async function main() {
   const db = pgDb(config.databaseUrl)
   try {
     await migrate(db, resolve(process.env.MIGRATIONS_DIR ?? 'migrations'))
+    if (cmd === 'operator-add') {
+      const ok = await makeOperator(db, email)
+      if (!ok) { console.error(`Aucun utilisateur avec l'adresse ${email} : il doit d'abord être membre d'une entreprise.`); process.exit(1) }
+      console.log(`${email} est maintenant opérateur de la plateforme (console : ${config.appUrl}/#/operator).`)
+      return
+    }
     const link = await loginLinkFor(db, config.appUrl, email)
     if (!link) { console.error(`Aucun membre avec l'adresse ${email}. Vérifiez l'orthographe, ou créez l'entreprise sur /#/setup.`); process.exit(1) }
     console.log(`Lien de connexion (valable 15 minutes, à usage unique) :\n${link}`)

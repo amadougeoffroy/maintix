@@ -11,7 +11,7 @@ describe('statistiques par client', () => {
     const st = clientStats(getState(), 'c2')
     expect(st.elevatorIds).toEqual(['e3', 'e4'])
     expect(st.avgHealth).toBeGreaterThan(0)
-    expect(st.annualRevenue).toBe(420 * 12)
+    expect(st.annualRevenue).toBe(280000 * 12)
     expect(st.open.majeur).toBe(1) // contrôle technique sur e4
     expect(st.breakdowns12m).toBe(1) // dépannage ouvert sur e4
     expect(st.mttrHours).toBeNull() // aucun dépannage clôturé
@@ -29,10 +29,10 @@ describe('statistiques par client', () => {
   it('signale les visites en retard de plus de 7 jours et les factures échues', () => {
     const s = getState()
     s.jobs.push({ id: 'jl', type: 'entretien', elevatorId: 'e1', techId: 't1', date: addDays(today(), -20), status: 'planifiee', createdAt: 'x', timeline: [] })
-    s.invoices.push({ id: 'f1', clientId: 'c1', kind: 'libre', lines: [{ label: 'x', qty: 1, unit: 100 }], vatRate: 20, status: 'emise', createdAt: 'x', number: 'FAC-1', issuedAt: addDays(today(), -60), dueAt: addDays(today(), -30) })
+    s.invoices.push({ id: 'f1', clientId: 'c1', kind: 'libre', lines: [{ label: 'x', qty: 1, unit: 100000 }], vatRate: 20, status: 'emise', createdAt: 'x', number: 'FAC-1', issuedAt: addDays(today(), -60), dueAt: addDays(today(), -30) })
     const st = clientStats(s, 'c1')
     expect(st.lateVisits).toBe(1)
     expect(st.overdueInvoices).toBe(1)
-    expect(st.outstanding).toBe(120)
+    expect(st.outstanding).toBe(120000)
   })
 })

@@ -69,9 +69,10 @@ test.describe.serial('mode serveur', () => {
     await again.close()
 
     // 3) données de démonstration + invitation d'un technicien
-    await page.goto('/#/office/settings')
+    await page.goto('/#/office/settings/aide')
     await page.getByRole('button', { name: /Charger des données de démonstration/ }).click()
     await synced(page)
+    await page.goto('/#/office/settings/equipe')
     await page.getByLabel('Nom complet').fill('Moussa Technicien')
     await page.getByLabel('Adresse e-mail').fill('moussa@dupont.test')
     await page.getByRole('button', { name: 'Envoyer l’invitation' }).click()
@@ -197,45 +198,99 @@ test.describe.serial('mode serveur', () => {
     await admin.ctx.close()
   })
 
-  test('création d’une entreprise : dialogue de confirmation visible, entreprise affichée en permanence, retour par un message', async ({ browser }) => {
-    const admin = await freshLogin(browser, 'ada@dupont.test')
-    const page = admin.page
+  test('console opérateur : création d’une entreprise et de son administrateur, offre, suspension, inscription libre-service', async ({ browser }) => {
+    const ada = await freshLogin(browser, 'ada@dupont.test')
+    const page = ada.page
     await expect(page.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible()
-    await expect(page.locator('.org-chip')).toHaveText('Ascenseurs Dupont')
-    await page.goto('/#/office/settings')
-    await page.getByLabel('Nom de la nouvelle entreprise').fill('Entreprise Cliente SA')
-    await page.getByRole('button', { name: 'Créer', exact: true }).click()
+    await page.goto('/#/office/more') // sur téléphone, le lien est dans « Plus » (la barre latérale n'existe que sur grand écran)
+    await page.getByRole('link', { name: 'Console opérateur' }).click()
+    await expect(page.getByRole('heading', { name: 'Console opérateur' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Ascenseurs Dupont' })).toBeVisible()
+    await expect(page.getByText('Techniciens').first()).toBeVisible()
 
+    // la création d'entreprise n'existe plus côté entreprise : seul le sélecteur reste
+    await page.goto('/#/office/settings/entreprise')
+    await expect(page.getByLabel('Nom de la nouvelle entreprise')).toHaveCount(0)
+    await page.goto('/#/operator')
+
+    // création d'une entreprise + son premier administrateur en une action
+    await page.getByLabel('Nom de l’entreprise').fill('Entreprise Cliente SA')
+    await page.getByLabel('Offre').first().selectOption({ label: 'Essentiel' })
+    await page.getByLabel('Nom de l’administrateur').fill('Directeur Test')
+    await page.getByLabel('E-mail de l’administrateur').fill('dg@cliente.test')
+    await page.getByRole('button', { name: 'Créer et envoyer l’invitation' }).click()
     const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible({ timeout: 20000 })
-    await expect(dialog.getByRole('heading', { name: 'Entreprise « Entreprise Cliente SA » créée' })).toBeVisible()
-    await expect(dialog).toContainText('Vous êtes maintenant connecté à « Entreprise Cliente SA »')
-    await expect(dialog).toContainText('Invitez son responsable')
+    await expect(dialog.getByRole('heading', { name: 'Entreprise « Entreprise Cliente SA » créée' })).toBeVisible({ timeout: 20000 })
+    await expect(dialog).toContainText('dg@cliente.test')
     if (process.env.SHOTS) await page.screenshot({ path: 'docs/screenshots/40-dialogue-entreprise-creee.png' })
-    // accessibilité du dialogue
     await page.waitForTimeout(500)
     const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
     expect(axe.violations.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([])
-    await dialog.getByRole('button', { name: 'Plus tard' }).click()
-    await skipWelcome(page) // la nouvelle entreprise déclenche aussi sa visite guidée
-    await expect(page.getByRole('dialog')).toBeHidden()
-    // l'entreprise active est écrite dans l'en-tête, et ses données sont vides
-    await expect(page.locator('.org-chip')).toHaveText('Entreprise Cliente SA')
-    await page.goto('/#/office/parc')
-    await expect(page.getByText('Aucun appareil').or(page.getByRole('heading', { name: 'Parc (0)' }))).toBeVisible()
+    await dialog.getByRole('button', { name: 'Compris' }).click()
+    await expect(page.getByRole('heading', { name: 'Entreprise Cliente SA' })).toBeVisible()
+    if (process.env.SHOTS) await page.screenshot({ path: 'docs/screenshots/44-console-operateur.png', fullPage: true })
 
-    // retour à la première entreprise : confirmation visible
-    await page.goto('/#/office/settings')
-    await page.getByLabel('Changer d’entreprise').selectOption({ label: 'Ascenseurs Dupont' })
-    await expect(page.getByRole('dialog').getByRole('heading', { name: 'Vous êtes dans « Ascenseurs Dupont »' })).toBeVisible({ timeout: 20000 })
+    // le nouvel administrateur : visite guidée, nom de l'entreprise, offre visible, aucune console
+    const dg = await browser.newContext({ viewport: { width: 412, height: 839 } })
+    const dgPage = await dg.newPage()
+    await dgPage.goto(await waitLink('dg@cliente.test'))
+    await expect(dgPage.getByRole('dialog').getByRole('heading', { name: /Bienvenue Directeur/ })).toBeVisible()
+    await skipWelcome(dgPage)
+    await expect(dgPage.locator('.org-line')).toHaveText('Entreprise Cliente SA')
+    await dgPage.goto('/#/operator')
+    await expect(dgPage.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible() // redirigé : pas opérateur
+    await expect(dgPage.getByRole('link', { name: 'Console opérateur' })).toHaveCount(0)
+    await dgPage.goto('/#/office/settings/entreprise')
+    await expect(dgPage.getByRole('heading', { name: 'Votre offre' })).toBeVisible()
+    await expect(dgPage.getByText('Essentiel')).toBeVisible()
+    await expect(dgPage.getByLabel('Nom de la nouvelle entreprise')).toHaveCount(0)
+
+    // offre : plafonds modifiables par l'opérateur
+    const card = page.locator('article', { hasText: 'Entreprise Cliente SA' })
+    await card.getByRole('button', { name: 'Offre et plafonds' }).click()
+    await card.getByLabel('Plafond techniciens').fill('2')
+    await card.getByRole('button', { name: 'Enregistrer l’offre' }).click()
+    await expect(page.locator('.toast-item')).toContainText('Offre de « Entreprise Cliente SA » enregistrée')
+
+    // suspension avec motif
+    page.once('dialog', (d) => d.accept('Facture impayée'))
+    await card.getByRole('button', { name: 'Suspendre' }).click()
+    await expect(card.getByText('Suspendue')).toBeVisible()
+    await dgPage.reload()
+    await expect(dgPage.getByRole('heading', { name: 'Accès suspendu' })).toBeVisible()
+    await expect(dgPage.getByText('Facture impayée')).toBeVisible()
+    if (process.env.SHOTS) await dgPage.screenshot({ path: 'docs/screenshots/45-acces-suspendu.png' })
+    // réactivation
+    await card.getByRole('button', { name: 'Réactiver' }).click()
+    await dgPage.goto('/#/office')
+    await dgPage.reload()
+    await expect(dgPage.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible()
+
+    // facturation de la plateforme : montants en FCFA
+    await page.getByRole('tab', { name: 'Facturation' }).click()
+    await expect(page.getByText('35 000 FCFA').first()).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Exporter (CSV)' })).toBeVisible()
+
+    // inscription en libre-service, validation par l'opérateur
+    const anon = await browser.newContext({ viewport: { width: 412, height: 839 } })
+    const ap = await anon.newPage()
+    await ap.goto('/#/signup')
+    await ap.getByLabel('Nom de l’entreprise').fill('Ascenseurs Diallo')
+    await ap.getByLabel('Votre nom').fill('Awa Diallo')
+    await ap.getByLabel('Votre e-mail professionnel').fill('awa@diallo.test')
+    await ap.getByRole('button', { name: 'Envoyer ma demande' }).click()
+    await expect(ap.getByRole('heading', { name: 'Demande envoyée' })).toBeVisible()
+    await page.reload()
+    await page.getByRole('tab', { name: /Demandes/ }).click()
+    await expect(page.getByRole('heading', { name: 'Ascenseurs Diallo' })).toBeVisible({ timeout: 20000 })
+    await page.getByRole('button', { name: 'Approuver et inviter' }).click()
+    await expect(page.getByRole('dialog').getByRole('heading', { name: /Accès accordé/ })).toBeVisible()
     await page.getByRole('button', { name: 'Compris' }).click()
-    await expect(page.locator('.org-chip')).toHaveText('Ascenseurs Dupont')
-
-    // enregistrement de la facturation : message flottant
-    await page.locator('form', { hasText: 'Entreprise et facturation' }).getByRole('button', { name: 'Enregistrer' }).click()
-    await expect(page.locator('.toast-item')).toContainText('Informations de l’entreprise enregistrées')
-    if (process.env.SHOTS) await page.screenshot({ path: 'docs/screenshots/41-toast-enregistre.png' })
-    await admin.ctx.close()
+    const awa = await browser.newContext({ viewport: { width: 412, height: 839 } })
+    const awaPage = await awa.newPage()
+    await awaPage.goto(await waitLink('awa@diallo.test'))
+    await expect(awaPage.getByRole('dialog').getByRole('heading', { name: /Bienvenue Awa/ })).toBeVisible()
+    await Promise.all([dg.close(), anon.close(), awa.close(), ada.ctx.close()])
   })
 
   test('didacticiel : visite guidée au premier accès, nom de l’entreprise sur le tableau de bord, premiers pas qui se cochent', async ({ browser }) => {
@@ -245,10 +300,16 @@ test.describe.serial('mode serveur', () => {
     await expect(page.locator('.org-line')).toHaveText('Ascenseurs Dupont') // nom visible sur le tableau de bord
     await expect(page.locator('.org-side')).toHaveText('Ascenseurs Dupont') // et dans la barre latérale
 
-    await page.goto('/#/office/settings')
-    await page.getByLabel('Nom de la nouvelle entreprise').fill('Entreprise Tuto')
-    await page.getByRole('button', { name: 'Créer', exact: true }).click()
-    await page.getByRole('dialog').getByRole('button', { name: 'Plus tard' }).click()
+    // l'opérateur crée l'entreprise (avec lui comme administrateur) puis bascule dessus
+    await page.goto('/#/operator')
+    await page.getByLabel('Nom de l’entreprise').fill('Entreprise Tuto')
+    await page.getByLabel('Nom de l’administrateur').fill('Ada Admin')
+    await page.getByLabel('E-mail de l’administrateur').fill('ada@dupont.test')
+    await page.getByRole('button', { name: 'Créer et envoyer l’invitation' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Compris' }).click()
+    await page.goto('/#/office/settings/entreprise')
+    await page.getByLabel('Changer d’entreprise').selectOption({ label: 'Entreprise Tuto' })
+    await page.getByRole('dialog').getByRole('button', { name: 'Compris' }).click()
 
     // première visite de cette entreprise : visite guidée en 5 écrans
     const tour = page.getByRole('dialog')
@@ -282,14 +343,14 @@ test.describe.serial('mode serveur', () => {
 
     // l'avancement est enregistré sur le serveur : un nouvel appareil ne ré-affiche pas la visite
     const again = await freshLogin(browser, 'ada@dupont.test')
-    await again.page.goto('/#/office/settings')
+    await again.page.goto('/#/office/settings/entreprise')
     await expect(again.page.getByRole('dialog')).toHaveCount(0)
     await again.ctx.close()
 
     // masquer puis réafficher la liste depuis les réglages
     await page.getByRole('button', { name: 'Masquer' }).click()
     await expect(page.getByRole('heading', { name: 'Premiers pas' })).toHaveCount(0)
-    await page.goto('/#/office/settings')
+    await page.goto('/#/office/settings/aide')
     await page.getByRole('button', { name: 'Afficher les premiers pas' }).click()
     await page.goto('/#/office')
     await expect(page.getByRole('heading', { name: 'Premiers pas' })).toBeVisible()

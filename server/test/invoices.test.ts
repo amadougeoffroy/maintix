@@ -15,7 +15,7 @@ beforeEach(async () => {
     { collection: 'settings', id: 'org', data: { id: 'org', legalName: 'Ascenseurs Dupont SAS', address: '1 rue X', siret: '123', vatNumber: 'FR12', iban: 'FR76 0000', paymentDays: 45, vatRate: 20, legalFooter: 'Pénalités de retard : 3 fois le taux légal.' } },
   ])
 })
-const draft = (id: string, clientId = 'c1', extra: Record<string, unknown> = {}) => ({ id, clientId, kind: 'libre', lines: [{ label: 'Contrat janvier', qty: 1, unit: 180 }], vatRate: 20, status: 'brouillon', createdAt: '2026-01-01', ...extra })
+const draft = (id: string, clientId = 'c1', extra: Record<string, unknown> = {}) => ({ id, clientId, kind: 'libre', lines: [{ label: 'Contrat janvier', qty: 1, unit: 180000 }], vatRate: 20, status: 'brouillon', createdAt: '2026-01-01', ...extra })
 const issue = (a: ReturnType<typeof api>, id: string) => a.post(`/api/invoices/${id}/issue`, {})
 const pull = async (a: ReturnType<typeof api>) => (await (await a.get('/api/sync/pull?since=0&limit=500')).json()) as { docs: { collection: string; id: string; data: Record<string, any> }[] } // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -95,7 +95,7 @@ describe('PDF et envoi', () => {
     const pdf = await buildInvoicePdf({ invoice: f, client: { name: 'Syndic Les Lilas', email: 'a@b.test' }, settings: { legalName: 'Ascenseurs Dupont SAS', iban: 'FR76 0000', legalFooter: 'Pénalités de retard : 3 fois le taux légal.', siret: '123' }, appUrl: 'https://x', compress: false })
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-')
     const text = pdfText(pdf)
-    for (const needle of ['FACTURE', 'FAC-2026-0007', 'Syndic Les Lilas', 'Contrat janvier', '216,00 EUR', 'IBAN FR76', 'Pénalités de retard']) expect(text).toContain(needle)
+    for (const needle of ['FACTURE', 'FAC-2026-0007', 'Syndic Les Lilas', 'Contrat janvier', '216 000 FCFA', 'IBAN FR76', 'Pénalités de retard']) expect(text).toContain(needle)
   })
   it('sert le PDF au bureau et au client concerné, jamais un brouillon, jamais à un autre client', async () => {
     await push(admin, [{ collection: 'invoices', id: 'f1', data: draft('f1') }, { collection: 'invoices', id: 'f2', data: draft('f2') }])
@@ -118,7 +118,7 @@ describe('PDF et envoi', () => {
     const m = env.mailer.sent[before]
     expect(m.to).toEqual(['syndic@lilas.test'])
     expect(m.subject).toContain('Ascenseurs Dupont SAS')
-    expect(m.text).toContain('216,00 €')
+    expect(m.text).toContain('216 000 FCFA')
     expect(m.attachments?.[0].contentType).toBe('application/pdf')
     await push(admin, [{ collection: 'invoices', id: 'd', data: draft('d') }])
     expect((await admin.post('/api/invoices/d/send', {})).status).toBe(404) // brouillon

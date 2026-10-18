@@ -30,9 +30,9 @@ export function seed(): State {
       { id: 't3', name: 'Hélène Roux', role: 'bureau', certs: [] },
     ],
     contracts: [
-      { id: 'k1', clientId: 'c1', elevatorIds: ['e1', 'e2'], periodicityMonths: 1, priceMonthly: 180, start: addDays(t, -400), indexation: 3 },
-      { id: 'k2', clientId: 'c2', elevatorIds: ['e3', 'e4'], periodicityMonths: 1, priceMonthly: 420, start: addDays(t, -800), indexation: 2.5 },
-      { id: 'k3', clientId: 'c3', elevatorIds: ['e5'], periodicityMonths: 2, priceMonthly: 95, start: addDays(t, -200), indexation: 3 },
+      { id: 'k1', clientId: 'c1', elevatorIds: ['e1', 'e2'], periodicityMonths: 1, priceMonthly: 120000, start: addDays(t, -400), indexation: 3 },
+      { id: 'k2', clientId: 'c2', elevatorIds: ['e3', 'e4'], periodicityMonths: 1, priceMonthly: 280000, start: addDays(t, -800), indexation: 2.5 },
+      { id: 'k3', clientId: 'c3', elevatorIds: ['e5'], periodicityMonths: 2, priceMonthly: 65000, start: addDays(t, -200), indexation: 3 },
     ],
     onCall: [
       { weekStart: ws, techId: 't1' },
@@ -53,7 +53,7 @@ export function seed(): State {
     ],
     quotes: [],
     invoices: [],
-    settings: [{ id: 'org', legalName: 'Ascenseurs Démo SAS', address: '10 rue de l’Industrie, 59000 Lille', siret: '123 456 789 00012', vatNumber: 'FR12 123456789', iban: 'FR76 3000 6000 0112 3456 7890 189', email: 'contact@demo.example', phone: '03 20 00 00 00', legalFooter: 'En cas de retard de paiement : pénalités au taux de 3 fois le taux d’intérêt légal et indemnité forfaitaire de recouvrement de 40 €. Pas d’escompte pour paiement anticipé.', paymentDays: 30, vatRate: 20 }],
+    settings: [{ id: 'org', legalName: 'Ascenseurs Démo SAS', address: '10 rue de l’Industrie, 59000 Lille', siret: '123 456 789 00012', vatNumber: 'FR12 123456789', iban: 'FR76 3000 6000 0112 3456 7890 189', email: 'contact@demo.example', phone: '03 20 00 00 00', legalFooter: 'En cas de retard de paiement : pénalités au taux de 3 fois le taux d’intérêt légal et indemnité forfaitaire de recouvrement. Pas d’escompte pour paiement anticipé.', paymentDays: 30, vatRate: 20 }],
   }
 }
 

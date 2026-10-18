@@ -9,6 +9,8 @@ export interface Config {
   smtpUrl?: string
   databaseUrl?: string
   vapidPublicKey?: string
+  /** adresses des opérateurs de la plateforme (console opérateur) */
+  operatorEmails: string[]
 }
 
 /** Adresse de la base : DATABASE_URL, sinon construite depuis DB_HOST/DB_USER/DB_PASSWORD/DB_NAME avec encodage du mot de passe
@@ -48,5 +50,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     smtpUrl: env.SMTP_URL || undefined,
     databaseUrl: databaseUrlFrom(env),
     vapidPublicKey: cleanKey(env.VAPID_PUBLIC_KEY),
+    operatorEmails: (env.OPERATOR_EMAILS ?? '').split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean),
   }
 }

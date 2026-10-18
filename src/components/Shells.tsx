@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Search as SearchIcon, Building2, History, Receipt, CalendarDays, Download, Euro, FileText, LayoutDashboard, Menu, PhoneCall, QrCode, ScanLine, Settings, Siren, TriangleAlert, User, Users, type LucideIcon } from 'lucide-react'
+import { ShieldCheck, Search as SearchIcon, Building2, History, Receipt, CalendarDays, Download, Euro, FileText, LayoutDashboard, Menu, PhoneCall, QrCode, ScanLine, Settings, Siren, TriangleAlert, User, Users, type LucideIcon } from 'lucide-react'
 import { Logo } from '../brand/Logo'
 import { byId, useData } from '../store'
 import { signOut } from '../session'
@@ -84,7 +84,8 @@ export function OfficeShell() {
         {OFFICE_LINKS.map(([to, Icon, label, end]) => (
           <NavLink key={to} to={to} end={end} className={tab}><Icon size={20} />{label}</NavLink>
         ))}
-        <button className="btn sm ghost" style={{ marginTop: 'auto' }} onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
+        {s.session.operator && <NavLink to="/operator" className={tab} style={{ marginTop: 'auto' }}><ShieldCheck size={20} />Console opérateur</NavLink>}
+        <button className="btn sm ghost" style={s.session.operator ? undefined : { marginTop: 'auto' }} onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
       </aside>
       <div className="app">
         <header className="topbar">
@@ -113,9 +114,28 @@ export function OfficeMore() {
   return (
     <div className="stack">
       <div><h1>Plus</h1>{s.session.orgName && <p className="org-line">{s.session.orgName}</p>}</div>
+      {s.session.operator && <NavLink to="/operator" className="card link row"><ShieldCheck size={20} /> Console opérateur</NavLink>}
       {OFFICE_LINKS.filter(([to]) => !['/office', '/office/planning', '/office/parc', '/office/defects'].includes(to)).map(([to, Icon, label]) => (
         <NavLink key={to} to={to} className="card link row"><Icon size={20} /> {label}</NavLink>
       ))}
+    </div>
+  )
+}
+
+export function OperatorShell() {
+  const s = useData()
+  const nav = useNavigate()
+  return (
+    <div className="app">
+      <SkipLink />
+      <header className="topbar">
+        <p className="brandline"><Logo variant="dark" height={22} /><span className="who">Console opérateur</span></p>
+        <NavLink to="/" className="btn sm ghost">Retour à l’application</NavLink>
+        <button className="btn sm ghost" onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
+      </header>
+      <OfflineBanner />
+      <Main className="content wide" />
+      <span className="sr-only">{s.session.fullName}</span>
     </div>
   )
 }

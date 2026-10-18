@@ -189,3 +189,13 @@ main:focus { outline: none; }
   .gs-list li > .row { flex: 1 0 100%; padding-left: 38px; }
   .gs-list li > .row .btn { flex: 1; }
 }
+
+.meter { display: grid; gap: 4px; }
+
+/* sous-onglets (Réglages) */
+.subtabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.subtabs::-webkit-scrollbar { display: none; }
+.subtab { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font-weight: 600; white-space: nowrap; }
+.subtab.on { background: var(--brand); color: var(--brand-ink); border-color: transparent; }
+button.subtab { font: inherit; cursor: pointer; }
+.content { overflow-x: clip; }

@@ -4,7 +4,7 @@ import { Badge, Health, JOB_LABEL, SeverityBadge } from '../../components/ui'
 import { quoteTotal } from '../office/Quotes'
 import { STATUS_LABEL as INV_LABEL, totals } from '../../invoicing'
 import { runtime } from '../../store'
-import { eur, fmtDate, fmtDateLong, today } from '../../util'
+import { fcfa, fmtDate, fmtDateLong, today } from '../../util'
 import { Icon } from '../../components/Icon'
 
 export default function Portal() {
@@ -41,7 +41,7 @@ export default function Portal() {
           <h2>Devis à valider</h2>
           {quotes.map((q) => (
             <div key={q.id} className="card stack">
-              <div className="row between"><strong>{byId(s.elevators, q.elevatorId)?.label}</strong><strong>{eur(quoteTotal(q) * 1.2)} TTC</strong></div>
+              <div className="row between"><strong>{byId(s.elevators, q.elevatorId)?.label}</strong><strong>{fcfa(quoteTotal(q) * 1.2)} TTC</strong></div>
               <ul style={{ margin: 0, paddingLeft: 18 }}>{q.lines.map((l, i) => <li key={i}>{l.qty} × {l.label}</li>)}</ul>
               {q.status === 'envoye' ? <button className="btn primary" onClick={() => actions.updateQuote(q.id, { status: 'accepte' })}><Icon n="check" /> Accepter ce devis</button> : <Badge tone="ok">Accepté</Badge>}
             </div>
@@ -55,7 +55,7 @@ export default function Portal() {
           {invoices.map((i) => (
             <div key={i.id} className="card row between wrap">
               <span><strong>{i.number}</strong> <span className="muted small">émise le {fmtDate(i.issuedAt!)} · échéance {fmtDate(i.dueAt!)}</span></span>
-              <span className="row"><strong>{eur(totals(i).ttc)}</strong><Badge tone={i.status === 'payee' ? 'ok' : i.status === 'annulee' ? 'bad' : i.dueAt! < today() ? 'bad' : 'warn'}>{i.status === 'emise' && i.dueAt! < today() ? 'En retard' : INV_LABEL[i.status]}</Badge>{runtime.server && <a className="btn sm" href={`/api/invoices/${i.id}/pdf`} target="_blank" rel="noreferrer">PDF</a>}</span>
+              <span className="row"><strong>{fcfa(totals(i).ttc)}</strong><Badge tone={i.status === 'payee' ? 'ok' : i.status === 'annulee' ? 'bad' : i.dueAt! < today() ? 'bad' : 'warn'}>{i.status === 'emise' && i.dueAt! < today() ? 'En retard' : INV_LABEL[i.status]}</Badge>{runtime.server && <a className="btn sm" href={`/api/invoices/${i.id}/pdf`} target="_blank" rel="noreferrer">PDF</a>}</span>
             </div>
           ))}
         </section>

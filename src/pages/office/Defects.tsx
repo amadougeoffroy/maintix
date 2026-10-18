@@ -37,7 +37,7 @@ export default function Defects() {
                 <div className="row wrap">
                   {d.status === 'ouvert' && <button className="btn sm" onClick={() => {
                     const site = byId(s.sites, e.siteId)!
-                    const q = actions.createQuote({ clientId: site.clientId, elevatorId: e.id, defectId: d.id, lines: [{ label: d.title, qty: 1, unit: 0 }, { label: 'Main-d’œuvre', qty: 2, unit: 65 }] })
+                    const q = actions.createQuote({ clientId: site.clientId, elevatorId: e.id, defectId: d.id, lines: [{ label: d.title, qty: 1, unit: 0 }, { label: 'Main-d’œuvre', qty: 2, unit: 25000 }] })
                     nav(`/office/quotes?open=${q.id}`)
                   }}><Icon n="euro" /> Créer un devis</button>}
                   <button className="btn sm" onClick={() => actions.setDefectStatus(d.id, 'leve')}><Icon n="check" /> Marquer comme levé</button>

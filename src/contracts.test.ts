@@ -40,11 +40,11 @@ describe('indexation', () => {
     expect(indexationDue(base, '2025-02-20')).toBe(true) // dans le mois qui précède l'anniversaire
     expect(indexationDue(base, '2024-12-01')).toBe(false)
   })
-  it('applique le taux, arrondit au centime et historise', () => {
-    const c = applyIndexation({ ...base, priceMonthly: 99.99, indexation: 2.5 }, '2025-03-15')
-    expect(c.priceMonthly).toBe(102.49)
+  it('applique le taux, arrondit au franc CFA entier et historise', () => {
+    const c = applyIndexation({ ...base, priceMonthly: 99999, indexation: 2.5 }, '2025-03-15')
+    expect(c.priceMonthly).toBe(102499) // 99 999 × 1,025 = 102 498,975 → 102 499
     expect(c.lastIndexed).toBe('2025-03-15')
-    expect(c.priceHistory).toEqual([{ date: '2025-03-15', from: 99.99, to: 102.49, rate: 2.5 }])
+    expect(c.priceHistory).toEqual([{ date: '2025-03-15', from: 99999, to: 102499, rate: 2.5 }])
     expect(indexationDue(c, '2025-04-01')).toBe(false)
     expect(indexationDue(c, '2026-02-20')).toBe(true)
   })

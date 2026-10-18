@@ -33,8 +33,8 @@ export const fmtDateLong = (d: string) =>
   })
 export const fmtTime = (d: string) =>
   new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-export const eur = (n: number) =>
-  n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })
+/** Montant en francs CFA : pas de centimes, séparateur de milliers (ex. 1 250 000 FCFA). */
+export const fcfa = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`
 
 export async function sha256Bytes(buf: ArrayBuffer): Promise<string> {
   const h = await crypto.subtle.digest('SHA-256', buf)

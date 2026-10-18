@@ -3,12 +3,12 @@ import { draftFromContract, draftFromQuote, fec, formatNumber, issueLocal, nextN
 import type { Client, Contract, Invoice } from './types'
 
 const clients: Client[] = [{ id: 'c1', name: 'Syndic "Les Lilas"; Bât. A', kind: 'syndic', contact: '', email: '', phone: '' }]
-const inv = (p: Partial<Invoice> = {}): Invoice => ({ id: 'f1', clientId: 'c1', kind: 'libre', lines: [{ label: 'x', qty: 2, unit: 99.99 }], vatRate: 20, status: 'brouillon', createdAt: '2026-01-01', ...p })
+const inv = (p: Partial<Invoice> = {}): Invoice => ({ id: 'f1', clientId: 'c1', kind: 'libre', lines: [{ label: 'x', qty: 2, unit: 99999.5 }], vatRate: 20, status: 'brouillon', createdAt: '2026-01-01', ...p })
 
 describe('montants', () => {
-  it('arrondit HT, TVA et TTC au centime', () => {
-    expect(totals(inv())).toEqual({ ht: 199.98, vat: 40, ttc: 239.98 })
-    expect(totals(inv({ lines: [{ label: 'a', qty: 3, unit: 33.33 }], vatRate: 5.5 }))).toEqual({ ht: 99.99, vat: 5.5, ttc: 105.49 })
+  it('arrondit HT, TVA et TTC au franc CFA entier (pas de centimes)', () => {
+    expect(totals(inv())).toEqual({ ht: 199999, vat: 40000, ttc: 239999 }) // 2 × 99 999,5 = 199 999 ; TVA 39 999,8 → 40 000
+    expect(totals(inv({ lines: [{ label: 'a', qty: 3, unit: 33333 }], vatRate: 18 }))).toEqual({ ht: 99999, vat: 18000, ttc: 117999 })
   })
 })
 
@@ -32,13 +32,13 @@ describe('numérotation', () => {
 })
 
 describe('création', () => {
-  const k: Contract = { id: 'k1', clientId: 'c1', elevatorIds: ['e1', 'e2'], periodicityMonths: 1, priceMonthly: 180, start: '2026-01-15', indexation: 3 }
+  const k: Contract = { id: 'k1', clientId: 'c1', elevatorIds: ['e1', 'e2'], periodicityMonths: 1, priceMonthly: 120000, start: '2026-01-15', indexation: 3 }
   it('facture une période de contrat', () => {
     const d = draftFromContract(k, '2026-01-15', 3, 2)
-    expect(d.lines[0]).toMatchObject({ qty: 3, unit: 180 })
+    expect(d.lines[0]).toMatchObject({ qty: 3, unit: 120000 })
     expect(d.lines[0].label).toContain('2 appareils')
     expect(d.periodEnd).toBe('2026-04-14')
-    expect(totals(d).ht).toBe(540)
+    expect(totals(d).ht).toBe(360000)
   })
   it('liste les mois non facturés et ignore ceux déjà facturés', () => {
     const billed = inv({ contractId: 'k1', periodStart: '2026-02-15', status: 'emise' })
@@ -61,7 +61,7 @@ describe('exports comptables', () => {
     const lines = csv.trim().split('\r\n')
     expect(lines).toHaveLength(3)
     expect(lines[1]).toContain('"Syndic ""Les Lilas""; Bât. A"')
-    expect(lines[1]).toContain('199,98;40,00;239,98')
+    expect(lines[1]).toContain('199999;40000;239999')
     expect(lines[2]).toContain('Payée')
   })
   it('FEC : 18 colonnes, écritures équilibrées, règlement lettré', () => {
@@ -79,7 +79,7 @@ describe('exports comptables', () => {
     expect(bq).toHaveLength(2)
     const lettered = body.filter((r) => r[13]).length
     expect(lettered).toBe(2) // la ligne 411 de la vente et la ligne 411 du règlement portent le même lettrage
-    expect(body.filter((r) => r[4] === '445710')[0][12]).toBe('40,00')
+    expect(body.filter((r) => r[4] === '445710')[0][12]).toBe('40000')
     expect(rows[1][3]).toBe('20260301')
   })
   it('FEC : ne contient que l’exercice demandé', () => {

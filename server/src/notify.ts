@@ -175,6 +175,8 @@ export class Notifier {
   /** Ouvre le suivi d'une nouvelle alerte et envoie le niveau 0. */
   async raise(orgId: string, job: Doc): Promise<void> {
     if (job.type !== 'depannage' || job.status !== 'planifiee') return
+    const active = (await this.db.query(`select 1 from organisations where id = $1 and status = 'active'`, [orgId])).rows.length
+    if (!active) return
     const jobId = String(job.id)
     const ins = await this.db.query(`insert into alerts (org_id, job_id) values ($1,$2) on conflict do nothing returning job_id`, [orgId, jobId])
     if (!ins.rows.length) return // déjà suivie

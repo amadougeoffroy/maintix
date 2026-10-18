@@ -48,7 +48,7 @@ describe('sondes de santé', () => {
     expect(await (await app.request('/api/health')).json()).toMatchObject({ ok: true, version: '1.2.3' })
     const ready = await app.request('/api/health/ready')
     expect(ready.status).toBe(200)
-    expect(await ready.json()).toMatchObject({ ok: true, db: 'up', migrations: 7 })
+    expect(await ready.json()).toMatchObject({ ok: true, db: 'up', migrations: 8 })
   })
   it('signale la base indisponible par un 503', async () => {
     const env = await makeEnv()

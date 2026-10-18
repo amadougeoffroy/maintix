@@ -26,7 +26,17 @@ Un seul service applicatif (API + front servi en statique) et un Postgres.
 
 > Alternative : service *Application* (build Dockerfile) + base *Postgres* créée par Dokploy ; alors renseigner `DATABASE_URL` (mot de passe encodé en URL) ou `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `APP_URL`, `BOOTSTRAP_TOKEN`, `SMTP_URL`, `MAIL_FROM`, `PORT=8787`.
 
-## 3. Première installation
+## 3. Première installation et opérateurs
+Le compte créé à l'installation devient **opérateur** de la plateforme. Pour ajouter d'autres opérateurs : variable `OPERATOR_EMAILS` (adresses séparées par des virgules, accès accordé à la première connexion), commande `node dist/cli.js operator-add vous@exemple.fr`, ou l'onglet Opérateurs de la console.
+
+### Donner accès à une nouvelle entreprise
+1. Soit l'entreprise demande un accès sur `https://votre-domaine/#/signup` ; vous recevez un e-mail et validez dans la console (onglet Demandes).
+2. Soit vous la créez directement : **Console opérateur → Créer une entreprise et son administrateur** (nom, offre, nom et e-mail de l'administrateur).
+3. L'administrateur reçoit un lien de connexion et une visite guidée ; vous suivez son usage et ajustez son offre dans la console. Vous pouvez suspendre l'entreprise (motif affiché) puis la réactiver.
+
+Les utilisateurs des entreprises ne peuvent pas créer d'entreprise.
+
+## 3 ter. Première installation
 1. Ouvrir `https://maintix.mondomaine.fr/#/setup`.
 2. Saisir nom de l'entreprise, votre nom, votre e-mail et le `BOOTSTRAP_TOKEN`.
 3. Ouvrir le lien reçu par e-mail → vous êtes administrateur.

@@ -199,7 +199,7 @@ export interface InvoiceData {
   appUrl: string
   compress?: boolean
 }
-const eurFr = (n: number) => `${n.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} EUR`
+const fcfaFr = (n: number) => `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA`
 const dFr = (d?: string) => (d ? d.split('-').reverse().join('/') : '—')
 
 /** Facture PDF (A4). Montants recalculés par le serveur à partir des lignes. */
@@ -247,7 +247,7 @@ export function buildInvoicePdf(d: InvoiceData): Promise<Buffer> {
     const h = Math.max(20, doc.font('Helvetica').fontSize(9.5).heightOfString(String(l.label), { width: 280 }) + 10)
     if (y + h > doc.page.height - 200) { doc.addPage(); y = 60 }
     doc.font('Helvetica').fontSize(9.5).fillColor(C.ink).text(String(l.label), cols.label, y + 4, { width: 280 })
-    doc.text(String(l.qty).replace('.', ','), cols.qty, y + 4, { width: 50, align: 'right' }).text(eurFr(Number(l.unit)), cols.unit - 10, y + 4, { width: 80, align: 'right' }).text(eurFr(Math.round(l.qty * l.unit * 100) / 100), cols.total - 6, y + 4, { width: 78, align: 'right' })
+    doc.text(String(l.qty).replace('.', ','), cols.qty, y + 4, { width: 50, align: 'right' }).text(fcfaFr(Number(l.unit)), cols.unit - 10, y + 4, { width: 80, align: 'right' }).text(fcfaFr(Math.round(l.qty * l.unit * 100) / 100), cols.total - 6, y + 4, { width: 78, align: 'right' })
     y += h
     doc.moveTo(L, y).lineTo(L + W, y).lineWidth(0.4).strokeColor(C.line).stroke()
   }
@@ -257,10 +257,10 @@ export function buildInvoicePdf(d: InvoiceData): Promise<Buffer> {
   if (y > doc.page.height - 190) { doc.addPage(); y = 60 }
   const tx = L + W - 220
   const trow = (k: string, v: string, bold = false) => { doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(bold ? 12 : 10).fillColor(C.ink).text(k, tx, y, { width: 110 }).text(v, tx + 100, y, { width: 120, align: 'right' }); y += bold ? 22 : 16 }
-  trow('Total HT', eurFr(t.ht))
-  trow(`TVA ${String(inv.vatRate).replace('.', ',')} %`, eurFr(t.vat))
+  trow('Total HT', fcfaFr(t.ht))
+  trow(`TVA ${String(inv.vatRate).replace('.', ',')} %`, fcfaFr(t.vat))
   doc.moveTo(tx, y).lineTo(tx + 220, y).lineWidth(1).strokeColor(C.teal).stroke(); y += 6
-  trow('Total TTC', eurFr(t.ttc), true)
+  trow('Total TTC', fcfaFr(t.ttc), true)
   if (inv.status === 'payee') { doc.font('Helvetica-Bold').fontSize(11).fillColor(C.ok).text(`ACQUITTÉE le ${dFr(inv.paidAt)}`, tx, y, { width: 220, align: 'right' }); y += 20 }
   if (inv.status === 'annulee') { doc.font('Helvetica-Bold').fontSize(11).fillColor(C.ko).text('ANNULÉE', tx, y, { width: 220, align: 'right' }); y += 20 }
 

@@ -14,7 +14,8 @@ Navigateur (PWA, IndexedDB)  ⇄  /api  ⇄  Postgres
 - **En-têtes** : CSP stricte (`script-src 'self'`, `frame-ancestors 'none'`…), `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` (caméra/micro seulement), HSTS en https, `Cache-Control: no-store` sur l'API.
 - **Débit** : limiteur **partagé en base** (fenêtres fixes), donc valable avec plusieurs instances : demandes de lien 5/h/adresse et 20/h/IP, signalements publics, PDF, envois, abonnements…
 - **Installation** : `POST /api/bootstrap` + `x-bootstrap-token` (comparaison à temps constant, verrou de table : une seule organisation créée même en cas d'appels simultanés). Désactivée sans `BOOTSTRAP_TOKEN`.
-- **Rôles** : `admin`, `bureau`, `tech`, `client`. Plusieurs entreprises par utilisateur (`/api/orgs`, `/api/auth/switch-org`, dernière entreprise mémorisée).
+- **Rôles d'entreprise** : `admin`, `bureau`, `tech`, `client`. Plusieurs entreprises par utilisateur (`/api/orgs`, `/api/auth/switch-org`, dernière entreprise mémorisée, une entreprise active de préférence à la connexion).
+- **Opérateurs de la plateforme** : rôle distinct des rôles d'entreprise (table `operators`). Le compte d'installation l'est ; ensuite `OPERATOR_EMAILS` (accordé à la première connexion), la commande `node dist/cli.js operator-add <e-mail>`, ou la console. **Les utilisateurs d'une entreprise ne peuvent pas créer d'entreprise** : seuls les opérateurs le peuvent.
 - Dépendances : `npm audit` sans alerte (surveillé en CI).
 
 ## Synchronisation
@@ -46,6 +47,19 @@ Toute écriture synchronisée est journalisée (`audit_log`) avec clés modifié
 - **SMS** (Twilio ou webhook) pour une personne bloquée, une escalade, ou quand aucun appareil n'est abonné.
 - **Escalade** : sans prise en charge au bout de `ESCALATION_MINUTES`, niveau 1 (+ bureau), puis niveau 2 (+ administrateurs). S'arrête dès que la mission change de statut. Un échec de notification ne bloque jamais la synchronisation.
 - Service worker personnalisé (`src/sw.ts`) : push, clic → ouverture de la mission, cache hors ligne.
+
+## Console opérateur (`/#/operator`, API `/api/operator/*`)
+Réservée aux opérateurs ; elle n'expose que des **compteurs**, jamais le contenu métier d'une entreprise.
+- **Entreprises** : liste avec offre, usage (techniciens, appareils, clients, missions sur 30 jours, dernière activité), montant mensuel estimé, alertes (plafond dépassé, essai expiré).
+- **Création d'une entreprise + de son premier administrateur** en une action (compte créé si l'adresse est nouvelle, e-mail d'accueil avec lien de connexion, visite guidée au premier accès).
+- **Offres** (essai 30 j, Essentiel, Pro, Sur mesure, Interne) préremplies puis ajustables par entreprise : plafonds, forfait mensuel et prix des techniciens/appareils en plus, **en FCFA**. Les dépassements ne bloquent rien : ils sont facturés.
+- **Suspension / réactivation** avec motif : l'entreprise voit un écran « Accès suspendu », l'API répond `403 org_suspended`, le signalement QR et la page d'état de ses appareils sont désactivés, aucune alerte d'astreinte n'est émise. Les données sont conservées ; l'opérateur garde la console même si sa propre entreprise est suspendue.
+- **Inscription en libre-service** (`/#/signup`, `POST /api/public/signup`) : champ piège anti-robots, limites de débit (5/h/IP, 3/jour/adresse), même réponse que la demande soit nouvelle, doublon ou ignorée. Confirmation au demandeur, e-mail aux opérateurs, **validation manuelle** (approuver crée l'entreprise et invite l'administrateur ; refuser prévient le demandeur avec le motif).
+- **Usage et facturation de la plateforme** : montants estimés par entreprise, **figeage mensuel** (`usage_snapshots`, relançable) et export CSV en FCFA. Chaque entreprise voit sa propre offre et son usage dans Réglages → Entreprise (`GET /api/org/plan`).
+- Toute action d'opérateur est tracée dans le journal.
+
+## Monnaie
+Tous les montants sont en **francs CFA (FCFA)**, entiers (pas de centimes) : calculs partagés dans `shared/money.ts`, PDF, CSV et tableaux de bord. Le taux de TVA reste un réglage de l'entreprise.
 
 ## Supervision
 Voir [OPERATIONS.md](OPERATIONS.md) : journal JSON, `X-Request-Id`, `/api/health`, `/api/health/ready`, `/api/metrics`, webhook d'erreurs.

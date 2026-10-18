@@ -1,6 +1,9 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useData } from './store'
-import { ClientShell, OfficeMore, OfficeShell, TechShell } from './components/Shells'
+import { ClientShell, OfficeMore, OfficeShell, OperatorShell, TechShell } from './components/Shells'
+import OperatorConsole from './pages/operator/OperatorConsole'
+import Signup from './pages/Signup'
+import Suspended from './pages/Suspended'
 import { FeedbackHost } from './components/FeedbackHost'
 import Login from './pages/Login'
 import Auth from './pages/Auth'
@@ -35,14 +38,21 @@ import Status from './pages/client/Status'
 
 export default function App() {
   const { session } = useData()
+  const { pathname } = useLocation()
+  const suspended = session.orgStatus === 'suspended' && (session.role || session.clientId)
   const home = session.role === 'tech' ? '/tech' : session.role === 'bureau' ? '/office' : session.clientId ? '/client' : null
   return (
     <>
     <FeedbackHost />
+    {suspended && !pathname.startsWith('/operator') ? <Suspended /> : (
     <Routes>
       <Route path="/" element={home ? <Navigate to={home} replace /> : <Login />} />
       <Route path="/auth" element={<Auth />} />
       <Route path="/setup" element={<Setup />} />
+      <Route path="/signup" element={<Signup />} />
+      <Route path="/operator" element={session.operator ? <OperatorShell /> : <Navigate to="/" replace />}>
+        <Route index element={<OperatorConsole />} />
+      </Route>
       <Route path="/signal/:id" element={<Signal />} />
       <Route path="/status/:id" element={<Status />} />
       <Route path="/report/:id" element={<Report />} />
@@ -72,6 +82,7 @@ export default function App() {
         <Route path="oncall" element={<OnCall />} />
         <Route path="qr" element={<QRPrint />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="settings/:tab" element={<Settings />} />
         <Route path="more" element={<OfficeMore />} />
         <Route path="clients" element={<Clients />} />
         <Route path="import" element={<Import />} />
@@ -83,6 +94,7 @@ export default function App() {
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    )}
     </>
   )
 }

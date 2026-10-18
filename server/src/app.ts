@@ -14,6 +14,7 @@ import type { Db } from './db'
 import type { Mailer } from './mailer'
 import { checkWrite, COLLECTIONS, docKey, type Collection, type Doc } from './rules'
 import { buildInvoicePdf, buildReportPdf } from './pdf'
+import { registerOperatorRoutes, loadOrgs } from './operator'
 import type { Notifier } from './notify'
 import { Metrics, newRequestId, silentLogger, type Logger } from './observability'
 import { totals } from '../../shared/money'
@@ -34,6 +35,7 @@ export interface Deps {
 type Env = { Variables: { who: Principal } }
 
 const COOKIE_PLAIN = 'cabine_session'
+const SUSPENDED_OK = ['/api/auth/session', '/api/auth/logout', '/api/auth/switch-org', '/api/orgs', '/api/operator/']
 
 /** Résumé compact d'une modification : clés changées, avec ancienne et nouvelle valeur pour les valeurs courtes. */
 export function summarize(before: Doc | null, after: Doc, created: boolean) {
@@ -110,6 +112,10 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     const token = getCookie(c, COOKIE)
     const who = token ? await principalFromSession(db, token) : null
     if (!who) return c.json({ error: 'unauthenticated' }, 401)
+    // entreprise suspendue : seuls la session, la déconnexion, le changement d'entreprise et la console opérateur restent accessibles
+    if (who.orgStatus === 'suspended' && !SUSPENDED_OK.some((p) => c.req.path === p || (p.endsWith('/') && c.req.path.startsWith(p) && who.operator))) {
+      return c.json({ error: 'org_suspended', reason: who.suspendedReason }, 403)
+    }
     c.set('who', who)
     await next()
   }
@@ -118,7 +124,15 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
 
   const sessionView = (w: Principal) => ({
     user: { id: w.userId, email: w.email }, org: { id: w.orgId, name: w.orgName }, role: w.role, fullName: w.fullName, techId: w.techId, clientId: w.clientId,
+    operator: w.operator, orgStatus: w.orgStatus, suspendedReason: w.suspendedReason,
   })
+
+  /** Les adresses listées dans OPERATOR_EMAILS deviennent opérateurs à leur première connexion. */
+  async function grantOperatorFromEnv(userId: string) {
+    if (!config.operatorEmails.length) return
+    const u = (await db.query<{ email: string }>('select email from users where id = $1', [userId])).rows[0]
+    if (u && config.operatorEmails.includes(u.email.toLowerCase())) await db.query('insert into operators (user_id) values ($1) on conflict do nothing', [userId])
+  }
 
   async function sendLoginLink(userId: string, email: string) {
     const token = await createLoginToken(db, userId)
@@ -164,8 +178,9 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     const created = await db.tx(async (t) => {
       await t.query('lock table organisations in exclusive mode') // évite deux installations simultanées
       if ((await t.query('select 1 from organisations limit 1')).rows.length) return false
-      await t.query('insert into organisations (id, name) values ($1,$2)', [orgId, orgName])
+      await t.query(`insert into organisations (id, name, plan) values ($1,$2,'interne')`, [orgId, orgName])
       await t.query('insert into users (id, email) values ($1,$2)', [userId, adminEmail])
+      await t.query('insert into operators (user_id) values ($1)', [userId]) // le premier compte est opérateur de la plateforme
       await t.query(`insert into members (user_id, org_id, role, full_name, tech_id) values ($1,$2,'admin',$3,$4)`, [userId, orgId, adminName, techId])
       await t.query(`insert into docs (org_id, collection, id, data, updated_by) values ($1,'techs',$2,$3,$4)`, [orgId, techId, JSON.stringify({ id: techId, name: adminName, role: 'bureau', certs: [] }), userId])
       return true
@@ -192,8 +207,10 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     if (!(await limit(`verify:${ip(c)}`, 30, HOUR))) return c.json({ error: 'rate_limited' }, 429)
     const userId = await consumeLoginToken(db, parsed.data.token)
     if (!userId) return c.json({ error: 'invalid_or_expired' }, 401)
+    await grantOperatorFromEnv(userId)
     const m = await db.query<{ org_id: string }>(
-      `select m.org_id from members m join users u on u.id = m.user_id where m.user_id = $1 order by (m.org_id = u.last_org_id) desc, m.created_at desc limit 1`, [userId],
+      `select m.org_id from members m join users u on u.id = m.user_id join organisations o on o.id = m.org_id where m.user_id = $1
+        order by (o.status = 'active') desc, (m.org_id = u.last_org_id) desc, m.created_at desc limit 1`, [userId],
     )
     if (!m.rows[0]) return c.json({ error: 'no_membership' }, 403)
     const session = await createSession(db, userId, m.rows[0].org_id)
@@ -310,22 +327,8 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     return c.json(sessionView(next))
   })
 
-  /** Un administrateur peut créer une entreprise supplémentaire (dont il devient administrateur). */
-  app.post('/api/orgs', requireAuth, requireRole('admin'), async (c) => {
-    const who = c.get('who')
-    const parsed = z.object({ name: z.string().trim().min(2).max(120) }).safeParse(await c.req.json().catch(() => null))
-    if (!parsed.success) return c.json({ error: 'invalid' }, 400)
-    if (!(await limit(`org-create:${who.userId}`, 5, 24 * HOUR))) return c.json({ error: 'rate_limited' }, 429)
-    const orgId = randomUUID()
-    const techId = uid('t')
-    await db.tx(async (t) => {
-      await t.query('insert into organisations (id, name) values ($1,$2)', [orgId, parsed.data.name])
-      await t.query(`insert into members (user_id, org_id, role, full_name, tech_id) values ($1,$2,'admin',$3,$4)`, [who.userId, orgId, who.fullName, techId])
-      await t.query(`insert into docs (org_id, collection, id, data, updated_by) values ($1,'techs',$2,$3,$4)`, [orgId, techId, JSON.stringify({ id: techId, name: who.fullName, role: 'bureau', certs: [] }), who.userId])
-    })
-    await audit(orgId, who.userId, 'org.create')
-    return c.json({ ok: true, orgId }, 201)
-  })
+  // La création d'une entreprise est réservée aux opérateurs de la plateforme : voir /api/operator/orgs et /api/public/signup.
+
 
   /* ---------- membres ---------- */
   app.get('/api/members', requireAuth, requireRole('admin', 'bureau'), async (c) => {
@@ -648,16 +651,28 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     await mailer.send({
       to,
       subject: `Facture ${b.invoice.number} – ${String(b.settings?.legalName ?? 'Maintix')}`,
-      text: `Bonjour,\n\n${parsed.data.message ? parsed.data.message + '\n\n' : ''}Veuillez trouver ci-joint la facture ${b.invoice.number} d'un montant de ${t.ttc.toFixed(2).replace('.', ',')} € TTC, à régler avant le ${String(b.invoice.dueAt).split('-').reverse().join('/')}.\n\nCordialement,\n${who.fullName}`,
+      text: `Bonjour,\n\n${parsed.data.message ? parsed.data.message + '\n\n' : ''}Veuillez trouver ci-joint la facture ${b.invoice.number} d'un montant de ${Math.round(t.ttc).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA TTC, à régler avant le ${String(b.invoice.dueAt).split('-').reverse().join('/')}.\n\nCordialement,\n${who.fullName}`,
       attachments: [{ filename: `${b.invoice.number}.pdf`, content: pdf, contentType: 'application/pdf' }],
     })
     await audit(who.orgId, who.userId, 'invoice.send', 'invoices', String(b.invoice.id), { to })
     return c.json({ ok: true, to })
   })
 
+  /* ---------- offre et usage de l'entreprise (visible par ses responsables) ---------- */
+  app.get('/api/org/plan', requireAuth, requireRole('admin', 'bureau'), async (c) => {
+    const org = (await loadOrgs(db, c.get('who').orgId))[0]
+    return c.json({ status: org.status, offer: org.offer, usage: org.usage, flags: org.flags, estimate: org.estimate })
+  })
+
+  /* ---------- console opérateur, inscriptions, facturation de la plateforme ---------- */
+  registerOperatorRoutes(app, {
+    db, config, mailer, requireAuth, limit, ip, audit, uid,
+    loginUrl: async (userId) => `${config.appUrl}/#/auth?token=${await createLoginToken(db, userId)}`,
+  })
+
   /* ---------- API publique (QR code) ---------- */
   async function findElevator(id: string) {
-    const r = await db.query<{ org_id: string; data: Doc }>(`select org_id, data from docs where collection='elevators' and id=$1 and not deleted limit 1`, [id])
+    const r = await db.query<{ org_id: string; data: Doc }>(`select d.org_id, d.data from docs d join organisations o on o.id = d.org_id where d.collection='elevators' and d.id=$1 and not d.deleted and o.status = 'active' limit 1`, [id])
     return r.rows[0]
   }
 

@@ -25,7 +25,8 @@ function EmailLogin() {
           <button className="btn primary block" disabled={state === 'sending'}>{state === 'sending' ? 'Envoi…' : 'Recevoir mon lien de connexion'}</button>
         </>
       )}
-      <p className="small muted">Pas de mot de passe : le lien vous connecte en un clic. <Link to="/setup">Première installation ?</Link></p>
+      <p className="small muted">Pas de mot de passe : le lien vous connecte en un clic.</p>
+      <p className="small"><Link to="/signup">Pas encore de compte ? Demander un accès</Link> · <Link to="/setup">Première installation</Link></p>
     </form>
   )
 }

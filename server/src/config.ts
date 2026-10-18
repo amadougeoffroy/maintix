@@ -32,6 +32,9 @@ export function checkDatabaseUrl(url: string): string | null {
   }
 }
 
+/** Même nettoyage que pour le serveur de notifications (clé exposée au navigateur). */
+const cleanKey = (raw?: string) => (raw ?? '').trim().replace(/^["']|["']$/g, '').trim().replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') || undefined
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const appUrl = (env.APP_URL ?? 'http://localhost:5173').replace(/\/$/, '')
   return {
@@ -44,6 +47,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     mailFrom: env.MAIL_FROM ?? 'Maintix <no-reply@localhost>',
     smtpUrl: env.SMTP_URL || undefined,
     databaseUrl: databaseUrlFrom(env),
-    vapidPublicKey: env.VAPID_PUBLIC_KEY || undefined,
+    vapidPublicKey: cleanKey(env.VAPID_PUBLIC_KEY),
   }
 }

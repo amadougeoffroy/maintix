@@ -32,10 +32,26 @@ export interface NotifyConfig {
   escalationMinutes: number
 }
 
+/** Nettoie une clé VAPID collée à la main : espaces, guillemets, `=` de remplissage, base64 standard → base64 URL-safe. */
+export function cleanVapidKey(raw: string | undefined): string | undefined {
+  const k = (raw ?? '').trim().replace(/^["']|["']$/g, '').trim().replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  return k || undefined
+}
+
+/** Une clé publique VAPID fait 65 octets, la privée 32 (base64 URL-safe). Renvoie un message d'erreur ou null. */
+export function vapidProblem(pub: string | undefined, priv: string | undefined): string | null {
+  if (!pub && !priv) return null
+  if (!pub || !priv) return 'VAPID_PUBLIC_KEY et VAPID_PRIVATE_KEY doivent être renseignées ensemble'
+  const size = (k: string) => (/^[A-Za-z0-9_-]+$/.test(k) ? Buffer.from(k, 'base64url').length : -1)
+  if (size(pub) !== 65) return 'VAPID_PUBLIC_KEY invalide (65 octets en base64 URL-safe attendus) : recopiez la clé publique affichée par « npx web-push generate-vapid-keys »'
+  if (size(priv) !== 32) return 'VAPID_PRIVATE_KEY invalide (32 octets en base64 URL-safe attendus) : recopiez la clé privée affichée par « npx web-push generate-vapid-keys »'
+  return null
+}
+
 export function loadNotifyConfig(env: NodeJS.ProcessEnv = process.env): NotifyConfig {
   return {
-    vapidPublicKey: env.VAPID_PUBLIC_KEY || undefined,
-    vapidPrivateKey: env.VAPID_PRIVATE_KEY || undefined,
+    vapidPublicKey: cleanVapidKey(env.VAPID_PUBLIC_KEY),
+    vapidPrivateKey: cleanVapidKey(env.VAPID_PRIVATE_KEY),
     vapidSubject: env.VAPID_SUBJECT || 'mailto:admin@localhost',
     smsProvider: env.SMS_PROVIDER === 'twilio' || env.SMS_PROVIDER === 'webhook' ? env.SMS_PROVIDER : undefined,
     twilio: env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_FROM ? { sid: env.TWILIO_ACCOUNT_SID, token: env.TWILIO_AUTH_TOKEN, from: env.TWILIO_FROM } : undefined,
@@ -44,9 +60,18 @@ export function loadNotifyConfig(env: NodeJS.ProcessEnv = process.env): NotifyCo
   }
 }
 
-export function realChannels(cfg: NotifyConfig, fetchImpl: typeof fetch = fetch): Channels {
-  const pushEnabled = !!(cfg.vapidPublicKey && cfg.vapidPrivateKey)
-  if (pushEnabled) webpush.setVapidDetails(cfg.vapidSubject!, cfg.vapidPublicKey!, cfg.vapidPrivateKey!)
+export function realChannels(cfg: NotifyConfig, fetchImpl: typeof fetch = fetch, warn: (m: string) => void = (m) => console.warn(m)): Channels {
+  let pushEnabled = !!(cfg.vapidPublicKey && cfg.vapidPrivateKey)
+  const problem = vapidProblem(cfg.vapidPublicKey, cfg.vapidPrivateKey)
+  if (problem) {
+    warn(`Notifications push désactivées : ${problem}.`)
+    pushEnabled = false
+  } else if (pushEnabled) {
+    try { webpush.setVapidDetails(cfg.vapidSubject!, cfg.vapidPublicKey!, cfg.vapidPrivateKey!) } catch (e) {
+      warn(`Notifications push désactivées : ${(e as Error).message}.`)
+      pushEnabled = false
+    }
+  }
   const smsEnabled = (cfg.smsProvider === 'twilio' && !!cfg.twilio) || (cfg.smsProvider === 'webhook' && !!cfg.smsWebhook)
   return {
     pushEnabled,

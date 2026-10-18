@@ -231,3 +231,28 @@ describe('canaux réels (appels HTTP simulés)', () => {
     expect(c.smsEnabled).toBe(false)
   })
 })
+
+describe('clés VAPID', () => {
+  it('nettoie les clés collées à la main et ne plante jamais sur une clé invalide', async () => {
+    const { cleanVapidKey, vapidProblem, realChannels, loadNotifyConfig } = await import('../src/notify')
+    const webpush = (await import('web-push')).default
+    const keys = webpush.generateVAPIDKeys()
+    expect(vapidProblem(keys.publicKey, keys.privateKey)).toBeNull()
+    // guillemets, espaces, « = » final, base64 standard
+    const std = Buffer.from(keys.publicKey, 'base64url').toString('base64')
+    expect(cleanVapidKey(`  "${std}"  `)).toBe(keys.publicKey)
+    expect(cleanVapidKey(`${keys.publicKey}==`)).toBe(keys.publicKey)
+    expect(cleanVapidKey('   ')).toBeUndefined()
+    const cfg = loadNotifyConfig({ VAPID_PUBLIC_KEY: ` '${std}' `, VAPID_PRIVATE_KEY: `${keys.privateKey}=` } as NodeJS.ProcessEnv)
+    expect(vapidProblem(cfg.vapidPublicKey, cfg.vapidPrivateKey)).toBeNull()
+    expect(realChannels(cfg, fetch, () => {}).pushEnabled).toBe(true)
+    // clé invalide : push désactivé avec un avertissement, sans exception
+    const warnings: string[] = []
+    const bad = realChannels({ vapidPublicKey: 'pas-une-cle', vapidPrivateKey: keys.privateKey, escalationMinutes: 10 }, fetch, (m) => warnings.push(m))
+    expect(bad.pushEnabled).toBe(false)
+    expect(warnings[0]).toContain('VAPID_PUBLIC_KEY invalide')
+    expect(warnings[0]).not.toContain(keys.privateKey)
+    expect(vapidProblem('abc', undefined)).toContain('ensemble')
+    expect(vapidProblem(undefined, undefined)).toBeNull()
+  })
+})

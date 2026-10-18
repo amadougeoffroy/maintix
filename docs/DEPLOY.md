@@ -21,7 +21,7 @@ Un seul service applicatif (API + front servi en statique) et un Postgres.
    | `METRICS_TOKEN`, `ERROR_WEBHOOK_URL`, `LOG_LEVEL` | supervision (voir OPERATIONS.md) |
 
    Toutes les variables sont décrites dans `.env.example`.
-3. Onglet **Domains** : domaine → service `app`, port `8787`, HTTPS activé.
+3. Onglet **Domains** : domaine → service `app`, port `8787`, HTTPS activé, certificat Let's Encrypt. Le `docker-compose.yml` rattache déjà `app` au réseau `dokploy-network` (sans cela, Traefik ignore le conteneur et répond `404 page not found`). **Redéployer après toute modification du domaine.**
 4. **Deploy**. Le healthcheck est `/api/health/ready` (base + migrations).
 
 > Alternative : service *Application* (build Dockerfile) + base *Postgres* créée par Dokploy ; alors renseigner `DATABASE_URL` (mot de passe encodé en URL) ou `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `APP_URL`, `BOOTSTRAP_TOKEN`, `SMTP_URL`, `MAIL_FROM`, `PORT=8787`.
@@ -40,7 +40,13 @@ Un seul service applicatif (API + front servi en statique) et un Postgres.
 - **Journaux** : connexions, refus de synchronisation, ajouts/retraits de membres, signalements publics → table `audit_log`.
 - **Sécurité** : `TRUST_PROXY=1` (par défaut) car Dokploy place un proxy devant l'application ; ne pas exposer le port 8787 directement sur Internet.
 
-## 5. Développer en local
+## 5. Développer en local (Docker)
+```bash
+docker network create dokploy-network   # une seule fois
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+```
+
+## 5 bis. Développer sans Docker
 ```bash
 cd server && npm install && npm run dev      # API sur :8787 (base embarquée sans DATABASE_URL, liens de connexion dans la console)
 npm run dev                                   # front sur :5173, /api proxifié vers :8787

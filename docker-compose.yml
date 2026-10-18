@@ -39,6 +39,10 @@ services:
     # En local : docker compose -f docker-compose.yml -f docker-compose.local.yml up
     expose:
       - "8787"
+    # Traefik (Dokploy) ne route que les conteneurs présents sur son réseau.
+    networks:
+      - default
+      - dokploy-network
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8787/api/health/ready || exit 1"]
       interval: 30s
@@ -61,3 +65,9 @@ services:
       retries: 10
 volumes:
   pgdata:
+
+networks:
+  # Réseau créé par Dokploy. En local, le créer une fois : docker network create dokploy-network
+  dokploy-network:
+    external: true
+

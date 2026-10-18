@@ -92,6 +92,7 @@ jobs:
       - run: docker build -t maintix:ci .
       - name: Démarrage avec Postgres et sondes de santé
         run: |
+          docker network create dokploy-network
           cp .env.example .env
           sed -i 's#^APP_URL=.*#APP_URL=http://localhost:8787#; s#^POSTGRES_PASSWORD=.*#POSTGRES_PASSWORD=ci-password#; s#^BOOTSTRAP_TOKEN=.*#BOOTSTRAP_TOKEN=ci-token#' .env
           docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build

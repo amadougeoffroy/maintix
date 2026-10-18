@@ -3,6 +3,7 @@ import { api, ApiError, type Member } from '../../api'
 import { actions, certStatus, runtime, useData } from '../../store'
 import type { OrgSettings } from '../../types'
 import { OrgSwitcher } from '../../components/OrgSwitcher'
+import { feedback } from '../../feedback'
 import { NotificationSettings } from '../../components/NotificationSettings'
 import { Badge } from '../../components/ui'
 import { fmtDateLong, today } from '../../util'
@@ -29,7 +30,7 @@ function Users() {
       {s.session.isAdmin && (
         <form className="card stack" onSubmit={async (e) => {
           e.preventDefault()
-          try { await api.invite({ email: f.email, fullName: f.fullName, role: f.role, clientId: f.role === 'client' ? f.clientId : undefined }); setMsg(`Invitation envoyée à ${f.email}.`); setF({ ...f, email: '', fullName: '' }); await reload() }
+          try { await api.invite({ email: f.email, fullName: f.fullName, role: f.role, clientId: f.role === 'client' ? f.clientId : undefined }); feedback.toast(`Invitation envoyée à ${f.email}.`); setMsg(''); setF({ ...f, email: '', fullName: '' }); await reload() }
           catch (x) { setMsg(x instanceof ApiError && x.code === 'already_member' ? 'Déjà membre.' : x instanceof ApiError && x.code === 'client_unknown' ? 'Choisissez un client existant.' : 'Invitation impossible.') }
         }}>
           <h3>Inviter un utilisateur</h3>
@@ -49,11 +50,14 @@ function OrgForm() {
   const base: OrgSettings = { id: 'org', legalName: '', address: '', siret: '', vatNumber: '', iban: '', email: '', phone: '', legalFooter: 'En cas de retard de paiement : pénalités au taux de 3 fois le taux d’intérêt légal et indemnité forfaitaire de recouvrement de 40 €.', paymentDays: 30, vatRate: 20 }
   const [f, setF] = useState<OrgSettings>(s.settings[0] ?? base)
   const [saved, setSaved] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  // les réglages arrivent de la synchronisation (ou d'un changement d'entreprise) : on les reprend tant que l'utilisateur n'a rien modifié
+  useEffect(() => { if (!dirty && s.settings[0]) setF(s.settings[0]) }, [s.settings, dirty])
   const F = (k: keyof OrgSettings, label: string, props: Record<string, unknown> = {}) => (
-    <label className="field">{label}<input value={String(f[k] ?? '')} onChange={(e) => { setSaved(false); setF({ ...f, [k]: props.type === 'number' ? +e.target.value : e.target.value }) }} {...props} /></label>
+    <label className="field">{label}<input value={String(f[k] ?? '')} onChange={(e) => { setSaved(false); setDirty(true); setF({ ...f, [k]: props.type === 'number' ? +e.target.value : e.target.value }) }} {...props} /></label>
   )
   return (
-    <form className="card stack" onSubmit={(e) => { e.preventDefault(); actions.upsertSettings(f); setSaved(true) }}>
+    <form className="card stack" onSubmit={(e) => { e.preventDefault(); actions.upsertSettings(f); setSaved(true); setDirty(false); feedback.toast('Informations de l’entreprise enregistrées.') }}>
       <h2>Entreprise et facturation</h2>
       <p className="small muted">Ces informations figurent sur vos factures. Vérifiez les mentions légales avec votre expert-comptable.</p>
       <div className="grid2">
@@ -61,7 +65,7 @@ function OrgForm() {
         {F('email', 'E-mail', { type: 'email' })}{F('phone', 'Téléphone')}{F('paymentDays', 'Délai de paiement (jours)', { type: 'number', min: 0 })}{F('vatRate', 'TVA par défaut (%)', { type: 'number', step: '0.1' })}
       </div>
       {F('address', 'Adresse')}
-      <label className="field">Mentions de pied de facture<textarea value={f.legalFooter} onChange={(e) => { setSaved(false); setF({ ...f, legalFooter: e.target.value }) }} /></label>
+      <label className="field">Mentions de pied de facture<textarea value={f.legalFooter} onChange={(e) => { setSaved(false); setDirty(true); setF({ ...f, legalFooter: e.target.value }) }} /></label>
       <div className="row"><button className="btn primary">Enregistrer</button>{saved && <span role="status" className="small">Enregistré.</span>}</div>
     </form>
   )

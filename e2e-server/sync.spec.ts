@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { expect, test, type Browser, type Page } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 
 const MAIL = '/tmp/cabine-e2e-mail.jsonl'
 const lastLink = (to: string): string => {
@@ -187,6 +188,45 @@ test.describe.serial('mode serveur', () => {
     const sent = [...lines].reverse().find((m) => [m.to].flat().includes('syndic.lilas@example.com'))!
     expect(sent.subject).toContain(`FAC-${year}-0001`)
     expect(sent.attachments?.[0].filename).toBe(`FAC-${year}-0001.pdf`)
+    await admin.ctx.close()
+  })
+
+  test('création d’une entreprise : dialogue de confirmation visible, entreprise affichée en permanence, retour par un message', async ({ browser }) => {
+    const admin = await freshLogin(browser, 'ada@dupont.test')
+    const page = admin.page
+    await expect(page.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible()
+    await expect(page.locator('.org-chip')).toHaveText('Ascenseurs Dupont')
+    await page.goto('/#/office/settings')
+    await page.getByLabel('Nom de la nouvelle entreprise').fill('Entreprise Cliente SA')
+    await page.getByRole('button', { name: 'Créer', exact: true }).click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible({ timeout: 20000 })
+    await expect(dialog.getByRole('heading', { name: 'Entreprise « Entreprise Cliente SA » créée' })).toBeVisible()
+    await expect(dialog).toContainText('Vous êtes maintenant connecté à « Entreprise Cliente SA »')
+    await expect(dialog).toContainText('Invitez son responsable')
+    if (process.env.SHOTS) await page.screenshot({ path: 'docs/screenshots/40-dialogue-entreprise-creee.png' })
+    // accessibilité du dialogue
+    const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
+    expect(axe.violations.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([])
+    await dialog.getByRole('button', { name: 'Plus tard' }).click()
+    await expect(dialog).toBeHidden()
+    // l'entreprise active est écrite dans l'en-tête, et ses données sont vides
+    await expect(page.locator('.org-chip')).toHaveText('Entreprise Cliente SA')
+    await page.goto('/#/office/parc')
+    await expect(page.getByText('Aucun appareil').or(page.getByRole('heading', { name: 'Parc (0)' }))).toBeVisible()
+
+    // retour à la première entreprise : confirmation visible
+    await page.goto('/#/office/settings')
+    await page.getByLabel('Changer d’entreprise').selectOption({ label: 'Ascenseurs Dupont' })
+    await expect(page.getByRole('dialog').getByRole('heading', { name: 'Vous êtes dans « Ascenseurs Dupont »' })).toBeVisible({ timeout: 20000 })
+    await page.getByRole('button', { name: 'Compris' }).click()
+    await expect(page.locator('.org-chip')).toHaveText('Ascenseurs Dupont')
+
+    // enregistrement de la facturation : message flottant
+    await page.locator('form', { hasText: 'Entreprise et facturation' }).getByRole('button', { name: 'Enregistrer' }).click()
+    await expect(page.locator('.toast-item')).toContainText('Informations de l’entreprise enregistrées')
+    if (process.env.SHOTS) await page.screenshot({ path: 'docs/screenshots/41-toast-enregistre.png' })
     await admin.ctx.close()
   })
 })

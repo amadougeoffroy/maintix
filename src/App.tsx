@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useData } from './store'
 import { ClientShell, OfficeMore, OfficeShell, TechShell } from './components/Shells'
+import { FeedbackHost } from './components/FeedbackHost'
 import Login from './pages/Login'
 import Auth from './pages/Auth'
 import Setup from './pages/Setup'
@@ -36,6 +37,8 @@ export default function App() {
   const { session } = useData()
   const home = session.role === 'tech' ? '/tech' : session.role === 'bureau' ? '/office' : session.clientId ? '/client' : null
   return (
+    <>
+    <FeedbackHost />
     <Routes>
       <Route path="/" element={home ? <Navigate to={home} replace /> : <Login />} />
       <Route path="/auth" element={<Auth />} />
@@ -80,5 +83,6 @@ export default function App() {
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   )
 }

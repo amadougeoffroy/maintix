@@ -32,7 +32,7 @@ export function TechShell() {
     <div className="app">
       <SkipLink />
       <header className="topbar">
-        <p className="brandline"><Logo variant="dark" height={22} /><span className="who">{me?.name ?? s.session.fullName ?? 'Technicien'}</span></p>
+        <p className="brandline"><Logo variant="dark" height={22} /><span className="who">{me?.name ?? s.session.fullName ?? 'Technicien'}{s.session.orgName ? <span className="org-chip">{s.session.orgName}</span> : null}</span></p>
         <SyncBadge />
         <button className="btn sm ghost" onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
       </header>
@@ -67,6 +67,7 @@ const OFFICE_LINKS: readonly (readonly [string, LucideIcon, string, boolean])[] 
 
 export function OfficeShell() {
   const nav = useNavigate()
+  const s = useData()
   // Ctrl/⌘ + K : recherche globale
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); nav('/office/search') } }
@@ -85,7 +86,7 @@ export function OfficeShell() {
       </aside>
       <div className="app">
         <header className="topbar">
-          <p className="brandline"><Logo variant="dark" height={22} /><span className="who">Bureau</span></p>
+          <p className="brandline"><Logo variant="dark" height={22} /><span className="who">Bureau{s.session.orgName ? <span className="org-chip">{s.session.orgName}</span> : null}</span></p>
           <NavLink to="/office/search" className="btn sm ghost" aria-label="Rechercher"><SearchIcon size={18} /></NavLink>
           <SyncBadge />
           <button className="btn sm ghost" onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>

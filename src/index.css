@@ -112,6 +112,16 @@ th { color: var(--muted); font-weight: 600; font-size: .8rem; }
 .paper table th { color: #444; } .paper td, .paper th { border-bottom: 1px solid #ddd; }
 .paper .hash { font-family: ui-monospace, monospace; font-size: .7rem; word-break: break-all; color: #444; }
 @media print {
+  /* l'impression est toujours en clair, même en thème sombre (sinon texte clair sur papier blanc = page vide) */
+  :root, :root[data-theme='dark'], :root:not([data-theme='light']) {
+    --bg: #fff; --surface: #fff; --surface-2: #f4f6f7; --text: #14201f; --muted: #444; --line: #d9e1e2;
+    --brand: #0f766e; --brand-ink: #fff; --brand-soft: #d7efec; --brand-deep: #0b5c55;
+    --ok: #166534; --ok-soft: #dcf5e3; --warn: #92400e; --warn-soft: #fdecc8; --bad: #b91c1c; --bad-soft: #fde0e0; --shadow: none;
+    color-scheme: light;
+  }
+  html, body, #root { height: auto !important; overflow: visible !important; background: #fff !important; color: #14201f; }
+  .app { display: block; min-height: 0; }
+  .toasts, .toast-item, .fb-dialog { display: none !important; }
   body { background: #fff; } .no-print, .topbar, .tabbar, .sidebar, .toast { display: none !important; }
   .content { padding: 0 !important; max-width: none !important; } .office { display: block !important; }
   .paper { border: 0; padding: 0; max-width: none; }

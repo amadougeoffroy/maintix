@@ -194,9 +194,14 @@ export const publicUrl = (path: string) => `${location.origin}${location.pathnam
 /** Dictée vocale (Web Speech API) quand le navigateur le permet. */
 export function VoiceButton({ onText }: { onText: (t: string) => void }) {
   const [on, setOn] = useState(false)
+  const [unavailable, setUnavailable] = useState(false)
+  // Sur iPhone/iPad, la dictée du navigateur est peu fiable (Siri/dictée à activer, absente dans Chrome iOS) :
+  // le micro du clavier du téléphone fait le même travail, sans réglage.
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   const Rec = (window as unknown as { SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR }).SpeechRecognition ??
     (window as unknown as { webkitSpeechRecognition?: new () => SR }).webkitSpeechRecognition
-  if (!Rec) return null
+  if (!Rec && !ios) return null
+  if (!Rec || ios || unavailable) return <p className="small muted"><Icon n="mic" size={14} /> Pour dicter, touchez le micro du clavier de votre téléphone.</p>
   return (
     <button
       type="button"
@@ -210,7 +215,8 @@ export function VoiceButton({ onText }: { onText: (t: string) => void }) {
         r.onerror = (ev) => {
           setOn(false)
           const code = ev.error
-          feedback.toast(code === 'not-allowed' || code === 'service-not-allowed' ? 'Micro refusé : autorisez-le dans les réglages du navigateur.' : code === 'no-speech' ? 'Aucune voix détectée, réessayez.' : 'La dictée vocale n’a pas pu démarrer sur cet appareil.', 'error')
+          if (code === 'service-not-allowed' || code === 'not-allowed' || code === 'language-not-supported') setUnavailable(true)
+          feedback.toast(code === 'not-allowed' || code === 'service-not-allowed' ? 'Micro refusé : autorisez-le dans les réglages du navigateur, ou utilisez le micro du clavier.' : code === 'no-speech' ? 'Aucune voix détectée, réessayez.' : 'La dictée du navigateur n’est pas disponible ici : utilisez le micro du clavier de votre téléphone.', 'error')
         }
         setOn(true)
         r.start()

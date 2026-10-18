@@ -36,6 +36,7 @@ export const useFeedback = () => useSyncExternalStore((l) => (listeners.add(l), 
 export const feedback = {
   /** Message flottant qui disparaît seul (5 s ; 8 s pour une erreur). */
   toast(text: string, tone: Tone = 'ok') {
+    if (snap.toasts.some((t) => t.text === text && t.tone === tone)) return // pas de doublon identique affiché
     const id = ++seq
     set({ toasts: [...snap.toasts, { id, tone, text }].slice(-3) })
     setTimeout(() => feedback.dismissToast(id), tone === 'error' ? 8000 : 5000)

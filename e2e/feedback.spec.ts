@@ -44,3 +44,16 @@ test('le thème choisi survit à un rechargement', async ({ page }) => {
   await page.reload()
   await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.+/)
 })
+
+test('un client peut revenir en arrière depuis la fiche d’un appareil', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: /Syndic Résidence/ }).click()
+  await page.getByRole('link', { name: 'Signaler une panne' }).first().click()
+  await page.getByRole('button', { name: /Retour/ }).click()
+  await expect(page.getByRole('link', { name: 'Signaler une panne' }).first()).toBeVisible()
+  // arrivée directe (QR code) sans historique : connecté, le retour mène à l'accueil
+  await page.goto('/#/status/e1')
+  await page.reload()
+  await page.getByRole('button', { name: /Retour/ }).click()
+  await expect(page.getByRole('link', { name: 'Signaler une panne' }).first()).toBeVisible()
+})

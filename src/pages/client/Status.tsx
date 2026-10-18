@@ -5,6 +5,7 @@ import { Logo } from '../../brand/Logo'
 import { byId, runtime, useData } from '../../store'
 import { Badge, QR, publicUrl } from '../../components/ui'
 import { fmtDateLong, fmtTime } from '../../util'
+import { BackLink } from '../../components/BackLink'
 import { Icon } from '../../components/Icon'
 
 export default function Status() {
@@ -28,6 +29,7 @@ export default function Status() {
   return (
     <div className="hero">
       <div className="box">
+        <BackLink />
         <div className="center stack"><Logo height={40} className="center-logo" /><h1>{el.label}</h1><p className="muted">{site.name}</p></div>
         <div className="card center stack">
           {active ? <Badge tone="bad"><Icon n="wrench" size={14} /> Panne signalée – intervention en cours</Badge> : <Badge tone="ok"><Icon n="check" size={14} /> En service</Badge>}

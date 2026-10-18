@@ -4,6 +4,7 @@ import { api } from '../../api'
 import { Logo } from '../../brand/Logo'
 import { feedback } from '../../feedback'
 import { actions, byId, runtime, useData } from '../../store'
+import { BackLink } from '../../components/BackLink'
 import { Icon } from '../../components/Icon'
 
 export default function Signal() {
@@ -26,6 +27,7 @@ export default function Signal() {
   return (
     <div className="hero">
       <div className="box">
+        <BackLink />
         <div className="center stack"><Logo height={40} className="center-logo" /><h1>Signaler une panne</h1><p className="muted">{el.label} · {siteName}</p></div>
         {done ? (
           <div className="card stack center">

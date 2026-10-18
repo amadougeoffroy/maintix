@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  front:
+    name: Front (types, tests unitaires, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx tsc -b
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+
+  server:
+    name: API (tests sur Postgres 16)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_PASSWORD: test, POSTGRES_DB: test }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: server/package-lock.json }
+      - run: npm ci
+        working-directory: server
+      - run: npx tsc --noEmit
+        working-directory: server
+      - name: Tests (base embarquée)
+        run: npm test
+        working-directory: server
+      - name: Tests (vrai Postgres)
+        run: npm test
+        working-directory: server
+        env: { TEST_DATABASE_URL: 'postgres://postgres:test@localhost:5432/test' }
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: server
+
+  e2e:
+    name: E2E (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, webkit, firefox]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.project }}
+      - run: npx playwright test --project=${{ matrix.project }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: e2e-${{ matrix.project }}, path: test-results }
+
+  e2e-server:
+    name: E2E mode serveur (API + synchro)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci && npm ci --prefix server
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test -c playwright.server.config.ts --project=chromium
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: e2e-server, path: test-results }
+
+  docker:
+    name: Image Docker + démarrage réel
+    runs-on: ubuntu-latest
+    needs: [front, server]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t maintix:ci .
+      - name: Démarrage avec Postgres et sondes de santé
+        run: |
+          cp .env.example .env
+          sed -i 's#^APP_URL=.*#APP_URL=http://localhost:8787#; s#^POSTGRES_PASSWORD=.*#POSTGRES_PASSWORD=ci-password#; s#^BOOTSTRAP_TOKEN=.*#BOOTSTRAP_TOKEN=ci-token#' .env
+          docker compose up -d --build
+          for i in $(seq 1 40); do curl -sf localhost:8787/api/health/ready && break; sleep 2; done
+          curl -sf localhost:8787/api/health/ready
+          curl -sf localhost:8787/ | grep -q "Maintix"
+          docker compose logs app | tail -20
+          docker compose down -v

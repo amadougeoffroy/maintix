@@ -1,0 +1,24 @@
+MAINTIX — KIT GRAPHIQUE v1.0
+Chaque visite, tracée.
+
+CONTENU
+01-logos/                Logo horizontal (principal), empilé, symbole. SVG (vectoriel) + PNG transparents.
+                         Variantes : couleur (fond clair) · fond-sombre · noir · blanc.
+02-icones-application/   Icône d'appli : iOS (carré plein, le système arrondit), Android, PWA, maskable.
+03-favicon/              favicon.svg, favicon.ico (16/32/48) et PNG 16 → 512.
+04-reseaux-sociaux/      Avatars, bannières LinkedIn / X / Facebook, image de partage, logo de signature e-mail.
+05-couleurs/             Jetons CSS/JSON, palette (txt, svg, png) avec contrastes.
+06-typographie/          Inter (WOFF2) + licence.
+07-pictogrammes/         Pictogrammes Lucide utilisés (SVG) + licence ; metier/ : 7 pictogrammes ascenseur propres à Maintix.
+08-charte/               Charte graphique (PDF et HTML).
+
+RÈGLES ESSENTIELLES
+- Utiliser toujours les fichiers fournis ; ne jamais redessiner ni déformer le logo.
+- Fond clair : version « couleur ». Fond Gaine (#0b2b2a) : « fond-sombre ». Fond de marque ou photo sombre : « blanc ». Noir et blanc imprimé : « noir ».
+- Zone de protection : hauteur du X autour du logo. Largeur minimale : 80 px (25 mm). En dessous : icône seule.
+- Le Signal (#f59e0b) n'est jamais utilisé en texte sur fond clair.
+- Détails complets : 08-charte/maintix-charte-graphique.pdf
+
+LICENCES
+Inter : SIL Open Font License 1.1 · Lucide : ISC. Le logo et le nom Maintix sont la propriété de leur titulaire ;
+la disponibilité du nom (marque, domaine) reste à vérifier.

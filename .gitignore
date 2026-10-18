@@ -1,0 +1,11 @@
+node_modules
+dist
+dev-dev-dist
+
+server/node_modules
+server/dist
+test-results
+playwright-report
+.env
+*.tsbuildinfo
+.DS_Store

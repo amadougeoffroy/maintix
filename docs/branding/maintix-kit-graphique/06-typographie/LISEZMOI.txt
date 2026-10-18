@@ -1,0 +1,3 @@
+Maintix utilise Inter (licence SIL Open Font, libre d’usage commercial).
+Pour Word/PowerPoint/Figma : installez Inter depuis https://rsms.me/inter/ (version complète avec TTF/OTF).
+Ces fichiers WOFF2 (sous-ensemble latin) servent pour le web.

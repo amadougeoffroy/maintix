@@ -1,0 +1,9 @@
+/* Jetons de design Maintix — généré par brand/build-assets.mjs, ne pas modifier à la main. */
+:root {
+  --mx-gaine: #0b2b2a; --mx-teal: #0f766e; --mx-lumiere: #14b8a6; --mx-menthe: #d7efec;
+  --mx-signal: #f59e0b; --mx-signal-profond: #92400e;
+  --mx-beton-50: #f4f6f7; --mx-beton-100: #eef2f3; --mx-beton-200: #d9e1e2; --mx-beton-500: #5b6b6a;
+  --mx-ok: #166534; --mx-ok-bg: #dcf5e3; --mx-watch: #92400e; --mx-watch-bg: #fdecc8; --mx-ko: #b91c1c; --mx-ko-bg: #fde0e0;
+  --mx-font: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; --mx-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --mx-radius-s: 10px; --mx-radius-m: 14px; --mx-radius-l: 20px; --mx-tap: 56px;
+}

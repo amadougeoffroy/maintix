@@ -1,0 +1,57 @@
+# Déploiement Dokploy (type « Docker Compose ») ou local : `docker compose up -d --build`.
+# Variables : voir .env.example. Le domaine public est routé par Dokploy vers le service `app` (port 8787).
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://cabine:${POSTGRES_PASSWORD:?défini dans .env}@db:5432/cabine
+      APP_URL: ${APP_URL:?ex. https://maintix.mondomaine.fr}
+      BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:?jeton aléatoire pour la première installation}
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-Maintix <no-reply@localhost>}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      # alertes d'astreinte (voir docs/DEPLOY.md)
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@localhost}
+      SMS_PROVIDER: ${SMS_PROVIDER:-}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM: ${TWILIO_FROM:-}
+      SMS_WEBHOOK_URL: ${SMS_WEBHOOK_URL:-}
+      SMS_WEBHOOK_TOKEN: ${SMS_WEBHOOK_TOKEN:-}
+      ESCALATION_MINUTES: ${ESCALATION_MINUTES:-10}
+      # supervision
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      ERROR_WEBHOOK_URL: ${ERROR_WEBHOOK_URL:-}
+      APP_VERSION: ${APP_VERSION:-}
+      MAIL_OUTBOX_FILE: ${MAIL_OUTBOX_FILE:-}
+    ports:
+      - "${HOST_PORT:-8787}:8787"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8787/api/health/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cabine
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?défini dans .env}
+      POSTGRES_DB: cabine
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cabine -d cabine"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  pgdata:

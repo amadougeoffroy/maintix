@@ -1,0 +1,44 @@
+MAINTIX — PALETTE (valeurs RVB/Hex ; CMJN et Pantone à calibrer avec l’imprimeur)
+
+Gaine            #0B2B2A  RVB 11, 43, 42     Texte, fonds sombres, logo sur clair
+Teal Maintix     #0F766E  RVB 15, 118, 110   Couleur principale : actions, liens, navigation
+Lumière          #14B8A6  RVB 20, 184, 166   Dégradés, éléments actifs sur fond sombre
+Menthe           #D7EFEC  RVB 215, 239, 236  Fonds d’accentuation, états sélectionnés
+Signal           #F59E0B  RVB 245, 158, 11   Accent : la flèche du X, repères, mise en avant
+Signal profond   #92400E  RVB 146, 64, 14    Signal en texte (contraste AA sur clair)
+Béton 50         #F4F6F7  RVB 244, 246, 247  Fond d’application
+Béton 100        #EEF2F3  RVB 238, 242, 243  Fonds secondaires, champs
+Béton 200        #D9E1E2  RVB 217, 225, 226  Filets, bordures
+Béton 500        #5B6B6A  RVB 91, 107, 106   Texte secondaire
+Blanc            #FFFFFF  RVB 255, 255, 255  Cartes, texte sur fond de marque
+
+États :
+Validé           texte #166534 · fond #DCF5E3
+À surveiller     texte #92400E · fond #FDECC8
+Défaut           texte #B91C1C · fond #FDE0E0
+
+Mode sombre :
+bg               #0D1415
+surface          #151F20
+surface2         #1D2A2B
+line             #2A3A3B
+text             #E8F0EF
+muted            #93A7A5
+brand            #2DD4BF
+brandInk         #062A27
+brandSoft        #123A37
+
+Contrastes WCAG calculés :
+Gaine sur Béton 50                 13.90 : 1
+Gaine sur Blanc                    15.07 : 1
+Teal Maintix sur Blanc             5.47 : 1
+Blanc sur Teal Maintix             5.47 : 1
+Béton 500 sur Béton 50             5.16 : 1
+Signal profond sur Blanc           7.09 : 1
+Signal sur Gaine                   7.02 : 1
+Signal sur Blanc                   2.15 : 1
+Blanc sur Gaine                    15.07 : 1
+Validé (texte sur fond)            6.18 : 1
+À surveiller (texte sur fond)      6.08 : 1
+Défaut (texte sur fond)            5.21 : 1
+Teal Maintix sur Menthe            6.52 : 1

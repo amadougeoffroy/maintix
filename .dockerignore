@@ -1,0 +1,10 @@
+node_modules
+server/node_modules
+dist
+server/dist
+test-results
+playwright-report
+.git
+.claude
+e2e
+e2e-server

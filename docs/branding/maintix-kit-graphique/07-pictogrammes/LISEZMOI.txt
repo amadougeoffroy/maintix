@@ -1,0 +1,3 @@
+41 pictogrammes utilisés dans Maintix (bibliothèque Lucide, licence ISC).
+Trait de 2 px, grille 24 px, couleur héritée (currentColor) : Gaine #0b2b2a par défaut, Teal #0f766e pour l’actif, Signal profond #92400e pour l’alerte.
+Toute la bibliothèque : https://lucide.dev

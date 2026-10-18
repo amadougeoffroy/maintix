@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { byId, certStatus, currentOnCall, healthScore, useData } from '../../store'
 import { Badge, Health, JOB_LABEL, SeverityBadge, StatusBadge } from '../../components/ui'
 import { contractAlerts } from '../../contracts'
+import { GettingStarted } from '../../components/GettingStarted'
 import { fmtDate, fmtTime, today } from '../../util'
 import { Icon } from '../../components/Icon'
 
@@ -24,9 +25,10 @@ export default function Dashboard() {
   return (
     <div className="stack-lg">
       <div className="row between wrap">
-        <h1>Tableau de bord</h1>
+        <div><h1>Tableau de bord</h1>{s.session.orgName && <p className="org-line">{s.session.orgName}</p>}</div>
         <span className="muted">Astreinte : <strong>{onCall?.name ?? '—'}</strong></span>
       </div>
+      <GettingStarted />
       <div className="grid2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
         <div className="card kpi"><span className="muted small">Pannes en cours</span><b style={{ color: urgent.length ? 'var(--bad)' : undefined }}>{urgent.length}</b></div>
         <div className="card kpi"><span className="muted small">Visites en retard</span><b style={{ color: late.length ? 'var(--warn)' : undefined }}>{late.length}</b></div>

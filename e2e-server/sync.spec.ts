@@ -14,6 +14,8 @@ const waitLink = async (to: string) => {
   for (let i = 0; i < 40; i++) { try { return lastLink(to) } catch { await new Promise((r) => setTimeout(r, 150)) } }
   throw new Error('lien introuvable')
 }
+/** Ferme la visite guidée d'accueil si elle s'affiche (première connexion d'un membre dans une entreprise). */
+const skipWelcome = async (page: Page) => { await page.getByRole('button', { name: 'Passer' }).click({ timeout: 4000 }).catch(() => {}) }
 const synced = (page: Page) => expect(page.getByRole('status').filter({ hasText: 'Synchronisé' })).toBeVisible({ timeout: 15000 })
 
 const mailCount = (to: string) => { try { return readFileSync(MAIL, 'utf8').trim().split('\n').filter((l) => JSON.parse(l).to === to).length } catch { return 0 } }
@@ -29,6 +31,7 @@ async function freshLogin(browser: Browser, email: string) {
   await expect(page.getByRole('status')).toContainText('lien de connexion')
   for (let i = 0; i < 40 && mailCount(email) === before; i++) await new Promise((r) => setTimeout(r, 150))
   await page.goto(lastLink(email))
+  await skipWelcome(page)
   return { ctx, page }
 }
 
@@ -36,6 +39,7 @@ async function loginWithLink(browser: Browser, email: string) {
   const ctx = await browser.newContext({ viewport: { width: 412, height: 839 } })
   const page = await ctx.newPage()
   await page.goto(await waitLink(email))
+  await skipWelcome(page)
   return { ctx, page }
 }
 
@@ -56,6 +60,8 @@ test.describe.serial('mode serveur', () => {
     // 2) connexion par lien magique (usage unique)
     const link = await waitLink('ada@dupont.test')
     await page.goto(link)
+    await expect(page.getByRole('dialog').getByRole('heading', { name: /Bienvenue Ada/ })).toBeVisible() // première connexion : visite guidée
+    await skipWelcome(page)
     await expect(page.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible()
     const again = await browser.newPage()
     await again.goto(link)
@@ -207,10 +213,12 @@ test.describe.serial('mode serveur', () => {
     await expect(dialog).toContainText('Invitez son responsable')
     if (process.env.SHOTS) await page.screenshot({ path: 'docs/screenshots/40-dialogue-entreprise-creee.png' })
     // accessibilité du dialogue
+    await page.waitForTimeout(500)
     const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
     expect(axe.violations.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([])
     await dialog.getByRole('button', { name: 'Plus tard' }).click()
-    await expect(dialog).toBeHidden()
+    await skipWelcome(page) // la nouvelle entreprise déclenche aussi sa visite guidée
+    await expect(page.getByRole('dialog')).toBeHidden()
     // l'entreprise active est écrite dans l'en-tête, et ses données sont vides
     await expect(page.locator('.org-chip')).toHaveText('Entreprise Cliente SA')
     await page.goto('/#/office/parc')
@@ -227,6 +235,64 @@ test.describe.serial('mode serveur', () => {
     await page.locator('form', { hasText: 'Entreprise et facturation' }).getByRole('button', { name: 'Enregistrer' }).click()
     await expect(page.locator('.toast-item')).toContainText('Informations de l’entreprise enregistrées')
     if (process.env.SHOTS) await page.screenshot({ path: 'docs/screenshots/41-toast-enregistre.png' })
+    await admin.ctx.close()
+  })
+
+  test('didacticiel : visite guidée au premier accès, nom de l’entreprise sur le tableau de bord, premiers pas qui se cochent', async ({ browser }) => {
+    const admin = await freshLogin(browser, 'ada@dupont.test')
+    const page = admin.page
+    await expect(page.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible()
+    await expect(page.locator('.org-line')).toHaveText('Ascenseurs Dupont') // nom visible sur le tableau de bord
+    await expect(page.locator('.org-side')).toHaveText('Ascenseurs Dupont') // et dans la barre latérale
+
+    await page.goto('/#/office/settings')
+    await page.getByLabel('Nom de la nouvelle entreprise').fill('Entreprise Tuto')
+    await page.getByRole('button', { name: 'Créer', exact: true }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Plus tard' }).click()
+
+    // première visite de cette entreprise : visite guidée en 5 écrans
+    const tour = page.getByRole('dialog')
+    await expect(tour.getByRole('heading', { name: 'Bienvenue Ada' })).toBeVisible()
+    await expect(tour).toContainText('Votre espace « Entreprise Tuto » est prêt')
+    await page.waitForTimeout(500) // laisse finir l'animation d'ouverture (la transparence fausse la mesure des contrastes)
+    const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
+    expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => `${n.target.join(' ')} ${n.any[0]?.message ?? ''}`).join(' | ')}`)).toEqual([])
+    await tour.getByRole('button', { name: 'Suivant' }).click()
+    await expect(tour.getByRole('heading', { name: /application mobile/ })).toBeVisible()
+    await tour.getByRole('button', { name: 'Précédent' }).click()
+    await expect(tour.getByRole('heading', { name: 'Bienvenue Ada' })).toBeVisible()
+    for (let i = 0; i < 4; i++) await tour.getByRole('button', { name: 'Suivant' }).click()
+    await expect(tour.getByRole('heading', { name: /Commençons/ })).toBeVisible()
+    if (process.env.SHOTS) await page.screenshot({ path: 'docs/screenshots/42-visite-guidee.png' })
+    await tour.getByRole('button', { name: 'Voir mes premiers pas' }).click()
+    await expect(page.getByRole('dialog')).toBeHidden()
+
+    // liste « Premiers pas » : 0/8, puis l'étape entreprise se coche d'elle-même
+    await expect(page.getByRole('heading', { name: 'Premiers pas' })).toBeVisible()
+    await expect(page.locator('.gs .badge')).toHaveText('0/8')
+    await expect(page.locator('.org-line')).toHaveText('Entreprise Tuto')
+    if (process.env.SHOTS) await page.screenshot({ path: 'docs/screenshots/43-premiers-pas.png' })
+    await page.getByRole('link', { name: 'Ouvrir les réglages' }).click()
+    const form = page.locator('form', { hasText: 'Entreprise et facturation' })
+    await form.getByLabel('Raison sociale').fill('Entreprise Tuto SAS')
+    await form.getByLabel('SIRET').fill('123 456 789 00012')
+    await form.getByRole('button', { name: 'Enregistrer' }).click()
+    await page.goto('/#/office')
+    await expect(page.locator('.gs .badge')).toHaveText('1/8')
+
+    // l'avancement est enregistré sur le serveur : un nouvel appareil ne ré-affiche pas la visite
+    const again = await freshLogin(browser, 'ada@dupont.test')
+    await again.page.goto('/#/office/settings')
+    await expect(again.page.getByRole('dialog')).toHaveCount(0)
+    await again.ctx.close()
+
+    // masquer puis réafficher la liste depuis les réglages
+    await page.getByRole('button', { name: 'Masquer' }).click()
+    await expect(page.getByRole('heading', { name: 'Premiers pas' })).toHaveCount(0)
+    await page.goto('/#/office/settings')
+    await page.getByRole('button', { name: 'Afficher les premiers pas' }).click()
+    await page.goto('/#/office')
+    await expect(page.getByRole('heading', { name: 'Premiers pas' })).toBeVisible()
     await admin.ctx.close()
   })
 })

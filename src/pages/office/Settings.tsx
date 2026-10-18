@@ -4,6 +4,7 @@ import { actions, certStatus, runtime, useData } from '../../store'
 import type { OrgSettings } from '../../types'
 import { OrgSwitcher } from '../../components/OrgSwitcher'
 import { feedback } from '../../feedback'
+import { patchOnboarding, useOnboarding } from '../../onboarding'
 import { NotificationSettings } from '../../components/NotificationSettings'
 import { Badge } from '../../components/ui'
 import { fmtDateLong, today } from '../../util'
@@ -71,6 +72,29 @@ function OrgForm() {
   )
 }
 
+function Help() {
+  const { flags } = useOnboarding()
+  if (!runtime.server) return null
+  return (
+    <section className="stack" id="aide">
+      <h2>Aide et prise en main</h2>
+      <div className="card stack">
+        <div className="row wrap">
+          <button className="btn sm" onClick={() => patchOnboarding({ welcomeSeen: false })}>Revoir la visite guidée</button>
+          <button className="btn sm" onClick={() => { patchOnboarding({ gettingStartedHidden: false }); feedback.toast('La liste « Premiers pas » est de nouveau affichée sur le tableau de bord.', 'info') }} disabled={flags.gettingStartedHidden === false}>Afficher les premiers pas</button>
+        </div>
+        <h3>Installer l’application sur un téléphone</h3>
+        <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
+          <li><strong>iPhone (Safari)</strong> : bouton Partager → « Sur l’écran d’accueil ». Indispensable pour recevoir les alertes (iOS 16.4 ou plus).</li>
+          <li><strong>Android (Chrome)</strong> : menu ⋮ → « Installer l’application » ou « Ajouter à l’écran d’accueil ».</li>
+          <li>Ensuite, chaque technicien ouvre <strong>Profil → Alertes d’astreinte</strong> pour activer les notifications.</li>
+        </ul>
+        {!flags.installDone && <div><button className="btn sm" onClick={() => patchOnboarding({ installDone: true })}>J’ai installé l’application</button></div>}
+      </div>
+    </section>
+  )
+}
+
 export default function Settings() {
   const s = useData()
   const [label, setLabel] = useState('')
@@ -82,6 +106,7 @@ export default function Settings() {
       <NotificationSettings />
       <OrgSwitcher />
       <OrgForm />
+      <Help />
       <section className="stack">
         <h2>Équipe & habilitations</h2>
         {s.techs.filter((t) => t.role === 'tech').map((t) => (

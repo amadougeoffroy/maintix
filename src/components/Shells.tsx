@@ -6,6 +6,7 @@ import { byId, useData } from '../store'
 import { signOut } from '../session'
 import { SyncBadge } from './SyncBadge'
 import { OfflineBanner } from './ui'
+import { WelcomeTour } from './WelcomeTour'
 
 const tab = ({ isActive }: { isActive: boolean }) => (isActive ? 'active' : '')
 
@@ -37,6 +38,7 @@ export function TechShell() {
         <button className="btn sm ghost" onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
       </header>
       <OfflineBanner />
+      <WelcomeTour kind="tech" />
       <Main className="content" />
       <nav className="tabbar" aria-label="Navigation technicien">
         <NavLink to="/tech" end className={tab}><CalendarDays size={24} /><span>Ma journée</span></NavLink>
@@ -78,7 +80,7 @@ export function OfficeShell() {
     <div className="app office">
       <SkipLink />
       <aside className="sidebar" aria-label="Navigation bureau">
-        <div style={{ padding: '6px 12px 16px' }}><Logo height={26} /></div>
+        <div style={{ padding: '6px 12px 16px' }}><Logo height={26} />{s.session.orgName && <div className="org-side" title={s.session.orgName}>{s.session.orgName}</div>}</div>
         {OFFICE_LINKS.map(([to, Icon, label, end]) => (
           <NavLink key={to} to={to} end={end} className={tab}><Icon size={20} />{label}</NavLink>
         ))}
@@ -86,12 +88,13 @@ export function OfficeShell() {
       </aside>
       <div className="app">
         <header className="topbar">
-          <p className="brandline"><Logo variant="dark" height={22} /><span className="who">Bureau{s.session.orgName ? <span className="org-chip">{s.session.orgName}</span> : null}</span></p>
+          <p className="brandline"><Logo variant="dark" height={22} /><span className="who"><span className="who-label">Bureau</span>{s.session.orgName ? <span className="org-chip">{s.session.orgName}</span> : null}</span></p>
           <NavLink to="/office/search" className="btn sm ghost" aria-label="Rechercher"><SearchIcon size={18} /></NavLink>
           <SyncBadge />
           <button className="btn sm ghost" onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
         </header>
         <OfflineBanner />
+        <WelcomeTour kind="admin" />
         <Main className="content wide" />
         <nav className="tabbar" aria-label="Navigation bureau mobile">
           <NavLink to="/office" end className={tab}><LayoutDashboard size={24} /><span>Accueil</span></NavLink>
@@ -106,9 +109,10 @@ export function OfficeShell() {
 }
 
 export function OfficeMore() {
+  const s = useData()
   return (
     <div className="stack">
-      <h1>Plus</h1>
+      <div><h1>Plus</h1>{s.session.orgName && <p className="org-line">{s.session.orgName}</p>}</div>
       {OFFICE_LINKS.filter(([to]) => !['/office', '/office/planning', '/office/parc', '/office/defects'].includes(to)).map(([to, Icon, label]) => (
         <NavLink key={to} to={to} className="card link row"><Icon size={20} /> {label}</NavLink>
       ))}

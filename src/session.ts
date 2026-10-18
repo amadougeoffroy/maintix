@@ -1,6 +1,7 @@
 import { api, type SessionInfo } from './api'
 import { actions, runtime } from './store'
 import { getSyncStatus, startSync, stopSync, syncNow } from './sync'
+import { loadOnboarding, resetOnboarding } from './onboarding'
 import type { State } from './types'
 
 export const toSession = (i: SessionInfo): State['session'] => ({
@@ -24,6 +25,7 @@ export async function enterSession(info: SessionInfo) {
   }
   remember(info.user.id)
   actions.setSession(toSession(info))
+  void loadOnboarding()
   await startSync({ onUnauthenticated: () => actions.setSession({ role: null, techId: null, clientId: null }) })
 }
 
@@ -61,6 +63,7 @@ export async function signOut(): Promise<boolean> {
   await api.logout().catch(() => {})
   await stopSync(true)
   remember(null)
+  resetOnboarding()
   actions.clearLocal()
   actions.logout()
   return true

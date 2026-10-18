@@ -163,3 +163,29 @@ main:focus { outline: none; }
 .org-chip { display: inline-block; margin-left: 10px; padding: 2px 10px; border-radius: 999px; background: rgb(255 255 255 / .16); font-size: .8rem; font-weight: 700; color: #fff; }
 @keyframes fb-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 @keyframes fb-pop { from { opacity: 0; transform: scale(.96) translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* nom de l'entreprise et didacticiel */
+.org-line { margin: 2px 0 0; font-weight: 700; color: var(--brand-deep); font-size: 1.05rem; }
+.org-side { margin-top: 10px; padding: 6px 10px; border-radius: 10px; background: var(--brand-soft); color: var(--brand-deep); font-weight: 700; font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tour { width: min(520px, calc(100vw - 32px)); }
+.tour-dots { display: flex; gap: 8px; justify-content: center; } .tour-dots span { width: 8px; height: 8px; border-radius: 99px; background: var(--line); } .tour-dots span.on { width: 24px; background: var(--brand); transition: width .2s; }
+.gs { border-color: var(--brand); display: grid; gap: 12px; }
+.gs-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.gs-list li { display: flex; gap: 12px; align-items: center; padding: 10px 8px; border-radius: 12px; flex-wrap: wrap; }
+.gs-list li.next { background: var(--brand-soft); } .gs-list li.done strong { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+.gs-mark { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--line); color: var(--muted); flex: none; }
+.gs-list li.done .gs-mark { background: var(--ok); border-color: var(--ok); color: #fff; } .gs-list li.next .gs-mark { border-color: var(--brand); color: var(--brand); }
+
+/* mobile : en-tête et premiers pas */
+.topbar .who { min-width: 0; flex: 1; display: flex; align-items: center; }
+.org-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 600px) {
+  .topbar .who-label { display: none; }
+  .topbar .org-chip { display: none; } /* trop à l'étroit : le nom figure sous le titre du tableau de bord et dans « Plus » */
+}
+.gs-list li .grow { flex: 1 1 220px; min-width: 0; }
+.gs-list li > .row { flex: 0 0 auto; }
+@media (max-width: 600px) {
+  .gs-list li > .row { flex: 1 0 100%; padding-left: 38px; }
+  .gs-list li > .row .btn { flex: 1; }
+}

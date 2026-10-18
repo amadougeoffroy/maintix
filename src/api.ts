@@ -97,6 +97,8 @@ export const api = {
   unsubscribePush: (endpoint: string) => call<{ ok: true }>('POST', '/notifications/unsubscribe', { endpoint }),
   setPhone: (phone: string) => call<{ ok: true }>('POST', '/notifications/phone', { phone }),
   testNotification: () => call<{ ok: true; push: number; sms: boolean }>('POST', '/notifications/test', {}),
+  onboarding: () => call<{ onboarding: Record<string, boolean> }>('GET', '/me/onboarding'),
+  setOnboarding: (patch: Record<string, boolean | undefined>) => call<{ onboarding: Record<string, boolean> }>('POST', '/me/onboarding', patch),
   report: (b: { elevatorId: string; description: string; trapped: boolean; reporter: string }) => call<{ ok: true; jobId: string }>('POST', '/public/report', b),
   status: (id: string) => call<{ label: string; siteName: string; status: string; lastVisit: string | null; job: { status: string; createdAt: string; timeline: { at: string; label: string }[] } | null }>('GET', `/public/status/${encodeURIComponent(id)}`),
 }

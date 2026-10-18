@@ -22,6 +22,10 @@ export interface Principal {
   orgKind: 'client' | 'platform'
   /** opérateur entré dans une entreprise cliente dont il n'est pas membre */
   impersonating: boolean
+  suspendedReasonCode: string | null
+  suspendedReasonLabel: string | null
+  /** un paiement de l'entreprise peut lever la suspension en cours */
+  payable: boolean
 }
 
 export const LOGIN_TTL_MIN = 15
@@ -64,9 +68,12 @@ export async function principalFromSession(db: Db, token: string): Promise<Princ
   const r = await db.query<{
     user_id: string; email: string; org_id: string; org_name: string; role: Role | null; full_name: string | null; tech_id: string | null; client_id: string | null
     org_status: 'active' | 'suspended'; suspended_reason: string | null; is_operator: boolean; org_kind: 'client' | 'platform'
+    reason_code: string | null; reason_label: string | null; payable: boolean | null
   }>(
     `select s.user_id, u.email, s.org_id, o.name as org_name, m.role, m.full_name, m.tech_id, m.client_id,
-            o.status as org_status, o.suspended_reason, o.kind as org_kind, (op.user_id is not null) as is_operator
+            o.status as org_status, o.suspended_reason, o.kind as org_kind, (op.user_id is not null) as is_operator, o.suspended_reason_code as reason_code,
+            (select r.label from suspension_reasons r where r.code = o.suspended_reason_code) as reason_label,
+            (select r.lifted_by_payment from suspension_reasons r where r.code = o.suspended_reason_code) as payable
        from sessions s
        join users u on u.id = s.user_id
        join organisations o on o.id = s.org_id
@@ -80,7 +87,7 @@ export async function principalFromSession(db: Db, token: string): Promise<Princ
   const impersonating = !x.role // opérateur sans appartenance à cette entreprise : il agit en administrateur
   return {
     userId: x.user_id, email: x.email, orgId: x.org_id, orgName: x.org_name, role: x.role ?? 'admin', fullName: x.full_name ?? 'Opérateur Maintix',
-    techId: x.tech_id, clientId: x.client_id, orgStatus: x.org_status, suspendedReason: x.suspended_reason, operator: x.is_operator, orgKind: x.org_kind, impersonating,
+    techId: x.tech_id, clientId: x.client_id, orgStatus: x.org_status, suspendedReason: x.suspended_reason, operator: x.is_operator, orgKind: x.org_kind, impersonating, suspendedReasonCode: x.reason_code, suspendedReasonLabel: x.reason_label, payable: !!x.payable,
   }
 }
 

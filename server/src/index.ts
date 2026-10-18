@@ -5,6 +5,7 @@ import { checkDatabaseUrl, loadConfig } from './config'
 import { migrate, pgDb, pgliteDb } from './db'
 import { consoleMailer, fileMailer, smtpMailer } from './mailer'
 import { createErrorReporter, createLogger, Metrics, type Level } from './observability'
+import { sweepSubscriptions } from './billing'
 import { loadNotifyConfig, Notifier, realChannels } from './notify'
 
 const config = loadConfig()
@@ -34,7 +35,11 @@ const notifier = new Notifier(db, realChannels(notifyCfg), notifyCfg, (m, x) => 
 if (!notifier.channels.pushEnabled) console.warn('VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY absents : notifications push désactivées.')
 if (!notifier.channels.smsEnabled) console.warn('SMS non configurés (SMS_PROVIDER) : alertes par SMS désactivées.')
 const stopEscalation = notifier.start()
+// échéances : suspension automatique des essais et abonnements échus (au démarrage puis toutes les heures)
+const sweep = () => sweepSubscriptions(db, mailer, config).then((r) => r.length && logger.log('info', 'auto_suspended', { orgs: r.map((o) => `${o.name}:${o.code}`) })).catch((e) => logger.log('error', 'sweep_failed', { error: String(e) }))
+void sweep()
+const sweepTimer = setInterval(sweep, 3600_000)
 const app = createApp({ db, config, mailer, notifier, logger, metrics, metricsToken: process.env.METRICS_TOKEN || undefined, reportError: createErrorReporter(process.env.ERROR_WEBHOOK_URL), version: process.env.APP_VERSION })
 serve({ fetch: app.fetch, port: config.port }, (i) => logger.log('info', 'listening', { port: i.port, version: process.env.APP_VERSION ?? 'dev' }))
 process.on('unhandledRejection', (e) => logger.log('error', 'unhandledRejection', { error: String(e) }))
-process.on('SIGTERM', async () => { stopEscalation(); await db.close(); process.exit(0) })
+process.on('SIGTERM', async () => { stopEscalation(); clearInterval(sweepTimer); await db.close(); process.exit(0) })

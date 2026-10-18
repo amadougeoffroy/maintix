@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Navigate, NavLink, useParams } from 'react-router-dom'
-import { Bell, Building2, LifeBuoy, Users as UsersIcon } from 'lucide-react'
+import { Bell, Building2, CreditCard, LifeBuoy, Users as UsersIcon } from 'lucide-react'
 import { api, ApiError, type Member } from '../../api'
 import { actions, certStatus, runtime, useData } from '../../store'
 import type { OrgSettings } from '../../types'
+import { PayPanel } from '../../components/PayPanel'
 import { PlanCard } from '../../components/PlanCard'
 import { feedback } from '../../feedback'
 import { patchOnboarding, useOnboarding } from '../../onboarding'
@@ -100,6 +101,7 @@ function Help() {
 const TABS = [
   ['entreprise', 'Entreprise', Building2],
   ['equipe', 'Équipe', UsersIcon],
+  ['abonnement', 'Abonnement', CreditCard],
   ['alertes', 'Alertes', Bell],
   ['aide', 'Aide et données', LifeBuoy],
 ] as const
@@ -169,6 +171,7 @@ export default function Settings() {
       </nav>
       {current === 'entreprise' && (<><PlanCard /><OrgForm /></>)}
       {current === 'equipe' && <Team />}
+      {current === 'abonnement' && (<><PlanCard /><PayPanel /></>)}
       {current === 'alertes' && <NotificationSettings />}
       {current === 'aide' && (<><Help /><Data /></>)}
     </div>

@@ -87,3 +87,11 @@ npm run test:e2e:server       # E2E mode serveur (API + synchro entre deux appar
 cd server && npm test         # API (Postgres embarqué)
 cd server && TEST_DATABASE_URL=postgres://… npm test   # API contre un vrai Postgres
 ```
+
+## 4. Abonnements, suspension automatique et paiement Jèko
+
+- **Échéances** : un essai (`Fin de l'essai`) ou un abonnement (`Échéance de l'abonnement`, console → fiche de l'entreprise → Offre et plafonds) échu suspend l'entreprise automatiquement (au démarrage puis toutes les heures) et prévient ses administrateurs par e-mail. Sans date, aucune suspension automatique.
+- **Motifs de suspension** (table `suspension_reasons`) : *Facture impayée*, *Fin de la période d'essai*, *Échéance de l'offre* peuvent être levés par le **paiement** de l'entreprise (ou par un opérateur) ; *Non-respect des conditions*, *Sécurité*, *Autre* ne peuvent être levés que par un **opérateur**.
+- **Paiement** : l'administrateur de l'entreprise choisit l'offre et la durée (1, 3, 6 ou 12 mois) dans Réglages → Abonnement (ou sur l'écran de suspension), puis paie par Jèko (Wave, Orange Money, MTN, Moov, Djamo). Le paiement confirmé prolonge l'abonnement et lève la suspension si le motif le permet.
+- **Clés Jèko** : console → **Paiements Jèko** (clé API, identifiant de clé, boutique, secret du webhook ; chiffrées en base, jamais réaffichées). Le bouton *Tester la connexion* liste vos boutiques pour retrouver le `storeId`. Dans votre tableau de bord Jèko (Paramètres → API & Webhooks), renseignez l'URL de notification indiquée dans la console (`https://votre-domaine/api/public/jeko/webhook`) et reportez le secret de signature. Définissez `SECRETS_KEY` pour chiffrer avec une clé hors base.
+- **Finances** : console → **Finances** (encaissé, paiements en cours, reste à payer, renouvellements à 30 jours, détail par entreprise, derniers paiements). Un paiement dont la notification n'est pas arrivée peut être confirmé à la main (*Marquer payé*) après vérification dans Jèko ; un paiement reçu hors ligne s'enregistre depuis la même page.

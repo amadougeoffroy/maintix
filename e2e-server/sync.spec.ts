@@ -296,13 +296,16 @@ test.describe.serial('mode serveur', () => {
     await expect(page.locator('.toast-item', { hasText: 'Offre de « Entreprise Cliente SA » enregistrée' })).toBeVisible()
 
     // suspension avec motif
-    await card.getByRole('button', { name: 'Suspendre' }).click()
-    await page.getByRole('dialog').getByLabel(/Motif/).fill('Facture impayée')
-    await page.getByRole('dialog').getByRole('button', { name: 'Suspendre l’entreprise' }).click()
-    await expect(card.getByText('Suspendue')).toBeVisible()
+    await card.getByRole('button', { name: 'Suspendre…' }).click()
+    await card.getByLabel('Motif de suspension').selectOption({ label: 'Facture impayée' })
+    await card.getByLabel(/Précision/).fill('Facture de mars')
+    await card.getByRole('button', { name: 'Suspendre l’entreprise' }).click()
+    await expect(card.getByText('Suspendue').first()).toBeVisible()
+    await expect(card).toContainText('levée possible par le paiement')
     await dgPage.reload()
     await expect(dgPage.getByRole('heading', { name: 'Accès suspendu' })).toBeVisible()
     await expect(dgPage.getByText('Facture impayée')).toBeVisible()
+    await expect(dgPage.getByText('paiement en ligne n’est pas encore activé')).toBeVisible() // motif payable, mais Jèko pas encore configuré
     if (process.env.SHOTS) await dgPage.screenshot({ path: 'docs/screenshots/45-acces-suspendu.png' })
     // réactivation
     await card.getByRole('button', { name: 'Réactiver' }).click()
@@ -310,8 +313,26 @@ test.describe.serial('mode serveur', () => {
     await dgPage.reload()
     await expect(dgPage.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible()
 
+    // finances et réglages Jèko de la console
+    await page.getByRole('tab', { name: 'Finances' }).click()
+    await expect(page.getByText('Reste à payer (échus)').first()).toBeVisible()
+    await expect(page.getByText('Encaissé (total)')).toBeVisible()
+    await page.getByRole('tab', { name: 'Paiements Jèko' }).click()
+    await page.getByLabel(/Clé API/).fill('sk_test_E2E00001')
+    await page.getByLabel(/Identifiant de la clé/).fill('kid-e2e')
+    await page.getByLabel(/Identifiant de la boutique/).fill('store-e2e')
+    await page.getByLabel(/Secret de signature/).fill('whsec_E2E')
+    await page.getByRole('button', { name: 'Enregistrer', exact: true }).click()
+    await expect(page.locator('.toast-item', { hasText: 'Réglages de paiement enregistrés' })).toBeVisible()
+    await expect(page.getByText('Clés API enregistrées')).toBeVisible()
+    await expect(page.getByText('sk_test_E2E00001')).toHaveCount(0) // jamais réaffichée en clair
+    await expect(page.getByLabel(/Clé API/)).toHaveValue('')
+    await page.waitForTimeout(400)
+    const axe2 = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
+    expect(axe2.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`)).toEqual([])
+
     // facturation de la plateforme : montants en FCFA
-    await page.getByRole('tab', { name: 'Facturation' }).click()
+    await page.getByRole('tab', { name: 'Usage et facturation' }).click()
     await expect(page.getByText('35 000 FCFA').first()).toBeVisible()
     await expect(page.getByRole('link', { name: 'Exporter (CSV)' })).toBeVisible()
 

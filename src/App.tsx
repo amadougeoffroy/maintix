@@ -7,6 +7,7 @@ import Suspended from './pages/Suspended'
 import { FeedbackHost } from './components/FeedbackHost'
 import Login from './pages/Login'
 import Landing from './pages/Landing'
+import BillingReturn from './pages/BillingReturn'
 import Auth from './pages/Auth'
 import Setup from './pages/Setup'
 import Report from './pages/Report'
@@ -46,13 +47,14 @@ export default function App() {
   return (
     <>
     <FeedbackHost />
-    {suspended && !pathname.startsWith('/operator') ? <Suspended /> : (
+    {suspended && !pathname.startsWith('/operator') && !pathname.startsWith('/billing') ? <Suspended /> : (
     <Routes>
       <Route path="/" element={home ? <Navigate to={home} replace /> : runtime.server ? <Landing /> : <Login />} />
       <Route path="/login" element={home ? <Navigate to={home} replace /> : <Login />} />
       <Route path="/auth" element={<Auth />} />
       <Route path="/setup" element={<Setup />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/billing/return" element={<BillingReturn />} />
       <Route path="/operator" element={session.operator ? <OperatorShell /> : <Navigate to="/" replace />}>
         <Route index element={<OperatorConsole />} />
       </Route>

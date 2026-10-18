@@ -15,6 +15,9 @@ import type { Mailer } from './mailer'
 import { checkWrite, COLLECTIONS, docKey, type Collection, type Doc } from './rules'
 import { buildInvoicePdf, buildReportPdf } from './pdf'
 import { registerOperatorRoutes, loadOrgs } from './operator'
+import { applyPayment, jekoGateway, MONTHS_CHOICES, PAY_METHODS, verifyJekoSignature, type Gateway, type JekoCreds } from './billing'
+import { getSettings } from './secrets'
+import { getPlan, loadPlans } from './plans'
 import type { Notifier } from './notify'
 import { Metrics, newRequestId, silentLogger, type Logger } from './observability'
 import { totals } from '../../shared/money'
@@ -32,11 +35,13 @@ export interface Deps {
   reportError?: (msg: string) => Promise<void>
   version?: string
   now?: () => number
+  /** passerelle de paiement (Jèko par défaut ; remplaçable dans les tests) */
+  gateway?: (c: JekoCreds) => Gateway
 }
 type Env = { Variables: { who: Principal } }
 
 const COOKIE_PLAIN = 'cabine_session'
-const SUSPENDED_OK = ['/api/auth/session', '/api/auth/logout', '/api/operator/']
+const SUSPENDED_OK = ['/api/auth/session', '/api/auth/logout', '/api/operator/', '/api/billing/']
 
 /** Résumé compact d'une modification : clés changées, avec ancienne et nouvelle valeur pour les valeurs courtes. */
 export function summarize(before: Doc | null, after: Doc, created: boolean) {
@@ -58,7 +63,7 @@ const emailSchema = z.string().trim().toLowerCase().email().max(200)
 const today = () => new Date().toISOString().slice(0, 10)
 const uid = (p: string) => `${p}_${randomToken().slice(0, 10)}`
 
-export function createApp({ db, config, mailer, notifier, logger = silentLogger, metrics = new Metrics(), metricsToken, reportError, version = process.env.APP_VERSION ?? 'dev', now = Date.now }: Deps) {
+export function createApp({ db, config, mailer, notifier, logger = silentLogger, metrics = new Metrics(), metricsToken, reportError, version = process.env.APP_VERSION ?? 'dev', now = Date.now, gateway = (c) => jekoGateway(c) }: Deps) {
   const app = new Hono<Env>()
   // En https : préfixe __Host- (cookie lié à l'hôte exact, Secure, sans Domain).
   const COOKIE = config.secureCookies ? `__Host-${COOKIE_PLAIN}` : COOKIE_PLAIN
@@ -114,7 +119,7 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     const who = token ? await principalFromSession(db, token) : null
     if (!who) return c.json({ error: 'unauthenticated' }, 401)
     // entreprise suspendue : seuls la session, la déconnexion, le changement d'entreprise et la console opérateur restent accessibles
-    if (who.orgStatus === 'suspended' && !who.operator && !SUSPENDED_OK.some((p) => c.req.path === p || (p.endsWith('/') && c.req.path.startsWith(p) && who.operator))) {
+    if (who.orgStatus === 'suspended' && !who.operator && !SUSPENDED_OK.some((p) => c.req.path === p || (p.endsWith('/') && c.req.path.startsWith(p) && (who.operator || p === '/api/billing/')))) {
       return c.json({ error: 'org_suspended', reason: who.suspendedReason }, 403)
     }
     c.set('who', who)
@@ -125,7 +130,7 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
 
   const sessionView = (w: Principal) => ({
     user: { id: w.userId, email: w.email }, org: { id: w.orgId, name: w.orgName }, role: w.role, fullName: w.fullName, techId: w.techId, clientId: w.clientId,
-    operator: w.operator, orgStatus: w.orgStatus, suspendedReason: w.suspendedReason, orgKind: w.orgKind, impersonating: w.impersonating,
+    operator: w.operator, orgStatus: w.orgStatus, suspendedReason: w.suspendedReason, suspendedReasonCode: w.suspendedReasonCode, suspendedReasonLabel: w.suspendedReasonLabel, payable: w.payable, orgKind: w.orgKind, impersonating: w.impersonating,
   })
 
   /** Entreprise « plateforme » : accueil des opérateurs, jamais listée ni facturée. Créée au besoin. */
@@ -692,6 +697,79 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     return c.json({ status: org.status, offer: org.offer, usage: org.usage, flags: org.flags, estimate: org.estimate })
   })
 
+  /* ---------- abonnement : offre, paiement en ligne (Jèko), webhook ---------- */
+  const jekoCreds = async (): Promise<JekoCreds | null> => {
+    const st = await getSettings(db, config.secretsKey)
+    return st['jeko.apiKey'] && st['jeko.apiKeyId'] && st['jeko.storeId'] ? { apiKey: st['jeko.apiKey'], apiKeyId: st['jeko.apiKeyId'], storeId: st['jeko.storeId'] } : null
+  }
+  app.get('/api/billing/overview', requireAuth, requireRole('admin', 'bureau'), async (c) => {
+    const who = c.get('who')
+    const org = (await db.query<{ plan: string; ends: string | null; trial: string | null; status: string; reason: string | null; code: string | null }>(
+      `select plan, to_char(subscription_ends_on, 'YYYY-MM-DD') as ends, to_char(trial_ends_on, 'YYYY-MM-DD') as trial, status, suspended_reason as reason, suspended_reason_code as code from organisations where id = $1`, [who.orgId])).rows[0]
+    const plans = (await loadPlans(db)).filter((p) => !p.archived && p.priceMonthly > 0)
+    const payments = (await db.query(`select id, plan, months, amount, status, source, method, reference, created_at as "createdAt", paid_at as "paidAt", period_end as "periodEnd" from payments where org_id = $1 order by created_at desc limit 30`, [who.orgId])).rows
+    return c.json({
+      online: !!(await jekoCreds()), canPay: who.role === 'admin' && (who.orgStatus === 'active' || who.payable),
+      current: { plan: org.plan, endsOn: org.ends, trialEndsOn: org.trial, status: org.status, suspension: org.status === 'suspended' ? { code: org.code, detail: org.reason, payable: who.payable } : null },
+      plans, months: MONTHS_CHOICES, methods: PAY_METHODS.map(([code, label]) => ({ code, label })), payments,
+    })
+  })
+  app.post('/api/billing/checkout', requireAuth, requireRole('admin'), async (c) => {
+    const who = c.get('who')
+    const parsed = z.object({ plan: z.string().max(30), months: z.union([z.literal(1), z.literal(3), z.literal(6), z.literal(12)]), method: z.enum(PAY_METHODS.map((m) => m[0]) as [string, ...string[]]) }).safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) return c.json({ error: 'invalid' }, 400)
+    if (who.orgStatus === 'suspended' && !who.payable) return c.json({ error: 'not_payable' }, 403) // suspension que seul un opérateur peut lever
+    if (!(await limit(`checkout:${who.userId}`, 15, HOUR))) return c.json({ error: 'rate_limited' }, 429)
+    const plan = await getPlan(db, parsed.data.plan)
+    if (!plan || plan.archived || plan.priceMonthly <= 0) return c.json({ error: 'unknown_plan' }, 400)
+    const creds = await jekoCreds()
+    if (!creds) return c.json({ error: 'payments_unavailable' }, 503)
+    const id = randomUUID()
+    const reference = `MTX-${id.slice(0, 8).toUpperCase()}`
+    const amount = plan.priceMonthly * parsed.data.months
+    await db.query(`insert into payments (id, org_id, plan, months, amount, method, reference, created_by) values ($1,$2,$3,$4,$5,$6,$7,$8)`, [id, who.orgId, plan.code, parsed.data.months, amount, parsed.data.method, reference, who.userId])
+    try {
+      const r = await gateway(creds).createPayment({ reference, amount, method: parsed.data.method, successUrl: `${config.appUrl}/#/billing/return?payment=${id}`, errorUrl: `${config.appUrl}/#/billing/return?payment=${id}&failed=1` })
+      await db.query('update payments set provider_id = $2, redirect_url = $3 where id = $1', [id, r.providerId, r.redirectUrl])
+      await audit(who.orgId, who.userId, 'payment.checkout', undefined, id, { plan: plan.code, months: parsed.data.months, amount })
+      return c.json({ ok: true, paymentId: id, redirectUrl: r.redirectUrl, amount })
+    } catch (e) {
+      await db.query(`update payments set status = 'failed', note = $2 where id = $1`, [id, String(e).slice(0, 200)])
+      logger.log('error', 'payment_provider_error', { error: String(e) })
+      return c.json({ error: 'payment_provider_error' }, 502)
+    }
+  })
+  app.get('/api/billing/payments/:id', requireAuth, requireRole('admin', 'bureau'), async (c) => {
+    const who = c.get('who')
+    const p = (await db.query(`select id, status, plan, months, amount, period_end as "periodEnd" from payments where id = $1 and org_id = $2`, [c.req.param('id') ?? '', who.orgId])).rows[0]
+    if (!p) return c.json({ error: 'not_found' }, 404)
+    const org = (await db.query<{ status: string }>('select status from organisations where id = $1', [who.orgId])).rows[0]
+    return c.json({ ...p, orgStatus: org.status })
+  })
+  /** Notification de Jèko : signée (HMAC-SHA256 du corps brut), idempotente. */
+  app.post('/api/public/jeko/webhook', async (c) => {
+    const raw = await c.req.text()
+    const secret = (await getSettings(db, config.secretsKey))['jeko.webhookSecret']
+    if (!secret || !verifyJekoSignature(raw, c.req.header('jeko-signature'), secret)) return c.json({ error: 'bad_signature' }, 401)
+    let body: { status?: string; transactionType?: string; transactionDetails?: { id?: string; reference?: string } } = {}
+    try { body = JSON.parse(raw) } catch { return c.json({ error: 'invalid' }, 400) }
+    if (c.req.header('jeko-event') === 'TRANSACTION_COMPLETED' && (!body.transactionType || body.transactionType === 'payment')) {
+      const ref = body.transactionDetails?.reference
+      const pid = body.transactionDetails?.id
+      const p = (await db.query<{ id: string; created_by: string | null }>(`select id, created_by from payments where source = 'jeko' and ((reference = $1 and $1 is not null) or (provider_id = $2 and $2 is not null)) limit 1`, [ref ?? null, pid ?? null])).rows[0]
+      if (p) {
+        if (body.status === 'success') {
+          const r = await applyPayment(db, p.id)
+          if (r.applied && p.created_by) {
+            const u = (await db.query<{ email: string }>('select email from users where id = $1', [p.created_by])).rows[0]
+            if (u) await mailer.send({ to: u.email, subject: 'Paiement reçu : merci', ...emailParts({ title: 'Paiement reçu', paragraphs: ['Nous avons bien reçu votre paiement. Votre abonnement Maintix est à jour.'], button: { label: 'Accéder à la plateforme', url: `${config.appUrl}/#/` } }) }).catch(() => {})
+          }
+        } else if (body.status === 'error') await db.query(`update payments set status = 'failed' where id = $1 and status = 'pending'`, [p.id])
+      }
+    }
+    return c.json({ ok: true })
+  })
+
   /* ---------- opérateur : entrer dans une entreprise cliente et revenir à la console ---------- */
   const requireOperator = async (c: Context<Env>, next: () => Promise<void>) => (c.get('who').operator ? next() : c.json({ error: 'forbidden' }, 403))
   const moveSession = async (c: Context<Env>, orgId: string) => {
@@ -717,7 +795,7 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
 
   /* ---------- console opérateur, inscriptions, facturation de la plateforme ---------- */
   registerOperatorRoutes(app, {
-    db, config, mailer, requireAuth, limit, ip, audit, uid,
+    db, config, mailer, requireAuth, limit, ip, audit, uid, makeGateway: gateway,
     loginUrl: async (userId) => `${config.appUrl}/#/auth?token=${await createLoginToken(db, userId)}`,
   })
 

@@ -25,18 +25,39 @@ export interface SessionInfo {
   impersonating?: boolean
   orgStatus?: 'active' | 'suspended'
   suspendedReason?: string | null
+  suspendedReasonCode?: string | null
+  suspendedReasonLabel?: string | null
+  payable?: boolean
   role: 'admin' | 'bureau' | 'tech' | 'client'
   fullName: string
   techId: string | null
   clientId: string | null
 }
-export interface Offer { plan: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialEndsOn: string | null; notes: string }
+export interface Offer { plan: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialEndsOn: string | null; subscriptionEndsOn?: string | null; notes: string }
 export interface OrgUsage { techs: number; elevators: number; clients: number; jobs30: number; members: number }
 export interface OperatorOrg {
   id: string; name: string; status: 'active' | 'suspended'; suspendedReason: string | null; createdAt: string
   offer: Offer; usage: OrgUsage; lastActivity: string | null; lastLogin: string | null
   estimate: { base: number; overTechs: number; overElevators: number; amount: number }
-  flags: { overTechs: boolean; overElevators: boolean; trialExpired: boolean }
+  flags: { overTechs: boolean; overElevators: boolean; trialExpired: boolean; subscriptionExpired?: boolean }
+  suspension: { code: string | null; label: string | null; detail: string | null; payable: boolean } | null
+}
+export interface SuspensionReason { code: string; label: string; liftedByPayment: boolean; automatic: boolean }
+export interface PaymentRow { id: string; orgId?: string; org?: string; plan: string; months: number; amount: number; status: 'pending' | 'paid' | 'failed'; source: 'jeko' | 'manual'; method: string | null; reference: string; note?: string | null; createdAt: string; paidAt: string | null; periodEnd: string | null }
+export interface FinanceView {
+  currency: 'FCFA'
+  collected: { total: number; thisMonth: number; series: { month: string; amount: number }[] }
+  pending: { amount: number; count: number }
+  outstanding: { amount: number; orgs: number }
+  upcoming30: { amount: number; orgs: number }
+  orgs: { orgId: string; name: string; status: string; plan: string; endsOn: string | null; monthly: number; paid: number; lastPaidAt: string | null; pending: number; due: number; upcoming: number }[]
+  recent: PaymentRow[]
+}
+export interface PaymentSettings { provider: 'jeko'; webhookUrl: string; apiKeyId: string; storeId: string; apiKeyMasked: string | null; webhookSecretMasked: string | null; configured: boolean; webhookConfigured: boolean; encryptedWith: string }
+export interface BillingOverview {
+  online: boolean; canPay: boolean
+  current: { plan: string; endsOn: string | null; trialEndsOn: string | null; status: string; suspension: { code: string | null; detail: string | null; payable: boolean } | null }
+  plans: PlanPreset[]; months: number[]; methods: { code: string; label: string }[]; payments: PaymentRow[]
 }
 export interface PlanPreset { archived?: boolean; code: string; name: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialDays?: number }
 export interface PlanInput { name: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialDays: number | null; archived: boolean }
@@ -120,8 +141,19 @@ export const api = {
   /* console opérateur */
   opOverview: () => call<{ orgs: OperatorOrg[]; pendingSignups: number; plans: PlanPreset[] }>('GET', '/operator/overview'),
   opCreateOrg: (b: { name: string; adminName: string; adminEmail: string; plan: string }) => call<{ ok: true; orgId: string }>('POST', '/operator/orgs', b),
-  opOffer: (id: string, b: Omit<Offer, 'notes' | 'trialEndsOn'> & { trialEndsOn: string | null; notes: string }) => call<{ ok: true; org: OperatorOrg }>('POST', `/operator/orgs/${id}/offer`, b),
-  opSuspend: (id: string, reason: string) => call<{ ok: true }>('POST', `/operator/orgs/${id}/suspend`, { reason }),
+  opOffer: (id: string, b: Omit<Offer, 'notes' | 'trialEndsOn'> & { trialEndsOn: string | null; subscriptionEndsOn: string | null; notes: string }) => call<{ ok: true; org: OperatorOrg }>('POST', `/operator/orgs/${id}/offer`, b),
+  opSuspend: (id: string, code: string, reason: string) => call<{ ok: true }>('POST', `/operator/orgs/${id}/suspend`, { code, reason }),
+  opReasons: () => call<{ reasons: SuspensionReason[] }>('GET', '/operator/suspension-reasons'),
+  opFinance: () => call<FinanceView>('GET', '/operator/finance'),
+  opPaymentSettings: () => call<PaymentSettings>('GET', '/operator/payment-settings'),
+  opSavePaymentSettings: (b: { apiKey?: string; apiKeyId?: string; storeId?: string; webhookSecret?: string }) => call<PaymentSettings>('PUT', '/operator/payment-settings', b),
+  opClearPaymentSettings: () => call<PaymentSettings>('DELETE', '/operator/payment-settings', {}),
+  opTestPayment: () => call<{ ok: true; stores: { id: string; name: string }[]; storeFound: boolean }>('POST', '/operator/payment-settings/test', {}),
+  opManualPayment: (orgId: string, b: { plan: string; months: number; amount?: number; note: string }) => call<{ ok: true; lifted: boolean }>('POST', `/operator/orgs/${orgId}/payments`, b),
+  opConfirmPayment: (id: string) => call<{ ok: true }>('POST', `/operator/payments/${id}/confirm`, {}),
+  billing: () => call<BillingOverview>('GET', '/billing/overview'),
+  checkout: (b: { plan: string; months: number; method: string }) => call<{ ok: true; paymentId: string; redirectUrl: string; amount: number }>('POST', '/billing/checkout', b),
+  paymentStatus: (id: string) => call<{ id: string; status: 'pending' | 'paid' | 'failed'; orgStatus: string; plan: string; months: number; amount: number; periodEnd: string | null }>('GET', `/billing/payments/${id}`),
   opReactivate: (id: string) => call<{ ok: true }>('POST', `/operator/orgs/${id}/reactivate`, {}),
   opSignups: (status?: string) => call<{ signups: SignupRequest[] }>('GET', `/operator/signups${status ? `?status=${status}` : ''}`),
   opApprove: (id: string, plan: string) => call<{ ok: true; orgId: string }>('POST', `/operator/signups/${id}/approve`, { plan }),

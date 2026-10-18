@@ -8,7 +8,7 @@ import { sealPayload } from '../../shared/canonical'
 
 export const APP_URL = 'https://cabine.test'
 
-export async function makeEnv(extra: Record<string, string> = {}) {
+export async function makeEnv(extra: Record<string, string> = {}, deps: Partial<Parameters<typeof createApp>[0]> = {}) {
   // TEST_DATABASE_URL : exécute la même suite contre un vrai Postgres (schéma recréé à chaque test).
   let db: Db
   if (process.env.TEST_DATABASE_URL) {
@@ -18,7 +18,7 @@ export async function makeEnv(extra: Record<string, string> = {}) {
   await migrate(db, fileURLToPath(new URL('../migrations', import.meta.url)))
   const mailer = memoryMailer()
   const config = loadConfig({ APP_URL, BOOTSTRAP_TOKEN: 'boot-secret', ...extra })
-  const app = createApp({ db, config, mailer })
+  const app = createApp({ db, config, mailer, ...deps })
   return { db, mailer, app, config }
 }
 export type Env = Awaited<ReturnType<typeof makeEnv>>
@@ -54,6 +54,7 @@ export const api = (env: Env, cookie: string) => ({
   get: (path: string) => env.app.request(path, { headers: { cookie } }),
   post: (path: string, body: unknown) => env.app.request(path, json(body, { cookie })),
   put: (path: string, body: unknown) => env.app.request(path, { ...json(body, { cookie }), method: 'PUT' }),
+  fetch: (method: string, path: string, body: unknown) => env.app.request(path, { ...json(body, { cookie }), method }),
   del: (path: string) => env.app.request(path, { method: 'DELETE', headers: { cookie, origin: APP_URL, 'content-type': 'application/json' } }),
 })
 

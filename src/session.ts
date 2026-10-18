@@ -17,6 +17,9 @@ export const toSession = (i: SessionInfo): State['session'] => ({
   impersonating: !!i.impersonating,
   orgStatus: i.orgStatus ?? 'active',
   suspendedReason: i.suspendedReason ?? null,
+  suspendedReasonCode: i.suspendedReasonCode ?? null,
+  suspendedReasonLabel: i.suspendedReasonLabel ?? null,
+  payable: !!i.payable,
 })
 
 const USER_KEY = 'cabine-user'

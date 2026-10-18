@@ -7,6 +7,8 @@ import type { Config } from './config'
 import type { Db } from './db'
 import type { Mailer } from './mailer'
 import { estimateAmount, getPlan, loadPlans, type OrgOffer, type Usage } from './plans'
+import { applyPayment, reactivateOrg, suspendOrg, todayStr, type Gateway, type JekoCreds } from './billing'
+import { clearSetting, getSettings, setSetting, SETTING_KEYS, type SettingKey } from './secrets'
 
 type Env = { Variables: { who: Principal } }
 type Mw = (c: Context<Env>, next: () => Promise<void>) => Promise<Response | void>
@@ -22,6 +24,8 @@ export interface OperatorDeps {
   /** crée un jeton de connexion et renvoie l'adresse complète du lien */
   loginUrl: (userId: string) => Promise<string>
   uid: (prefix: string) => string
+  /** fabrique la passerelle de paiement à partir des clés enregistrées */
+  makeGateway: (c: JekoCreds) => Gateway
 }
 
 const emailSchema = z.string().trim().toLowerCase().email().max(200)
@@ -35,11 +39,15 @@ const monthRe = /^\d{4}-(0[1-9]|1[0-2])$/
 interface OrgRow {
   id: string; name: string; status: 'active' | 'suspended'; suspended_reason: string | null; created_at: string; plan: string; trial_ends_on: string | null
   max_techs: number | null; max_elevators: number | null; price_monthly: number; extra_tech_price: number; extra_elevator_price: number; notes: string
+  subscription_ends_on: string | null; suspended_reason_code: string | null; suspended_reason_label: string | null; payable: boolean | null
   members: number; techs: number; elevators: number; clients: number; jobs30: number; last_activity: string | null; last_login: string | null
 }
 
 const ORG_SQL = `
   select o.id, o.name, o.status, o.suspended_reason, o.created_at, o.plan, to_char(o.trial_ends_on, 'YYYY-MM-DD') as trial_ends_on,
+         to_char(o.subscription_ends_on, 'YYYY-MM-DD') as subscription_ends_on, o.suspended_reason_code,
+         (select r.label from suspension_reasons r where r.code = o.suspended_reason_code) as suspended_reason_label,
+         (select r.lifted_by_payment from suspension_reasons r where r.code = o.suspended_reason_code) as payable,
          o.max_techs, o.max_elevators, o.price_monthly, o.extra_tech_price, o.extra_elevator_price, o.notes,
          (select count(*)::int from members m where m.org_id = o.id) as members,
          (select count(*)::int from members m where m.org_id = o.id and m.role = 'tech') as techs,
@@ -58,9 +66,10 @@ export function shapeOrg(r: OrgRow, now = today()) {
   const est = estimateAmount(offerOf(r), usage)
   return {
     id: r.id, name: r.name, status: r.status, suspendedReason: r.suspended_reason, createdAt: r.created_at,
-    offer: { ...offerOf(r), trialEndsOn: r.trial_ends_on, notes: r.notes },
+    suspension: r.status === 'suspended' ? { code: r.suspended_reason_code, label: r.suspended_reason_label, detail: r.suspended_reason, payable: !!r.payable } : null,
+    offer: { ...offerOf(r), trialEndsOn: r.trial_ends_on, subscriptionEndsOn: r.subscription_ends_on, notes: r.notes },
     usage, lastActivity: r.last_activity, lastLogin: r.last_login, estimate: est,
-    flags: { overTechs: est.overTechs > 0, overElevators: est.overElevators > 0, trialExpired: r.plan === 'essai' && !!r.trial_ends_on && r.trial_ends_on < now },
+    flags: { overTechs: est.overTechs > 0, overElevators: est.overElevators > 0, trialExpired: r.plan === 'essai' && !!r.trial_ends_on && r.trial_ends_on < now, subscriptionExpired: !!r.subscription_ends_on && r.subscription_ends_on < now },
   }
 }
 
@@ -135,33 +144,38 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     const who = c.get('who')
     const int = z.number().int().min(0).max(1_000_000_000)
     const parsed = z.object({
-      plan: z.string().max(30), trialEndsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+      plan: z.string().max(30), trialEndsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(), subscriptionEndsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
       maxTechs: int.nullable(), maxElevators: int.nullable(), priceMonthly: int, extraTechPrice: int, extraElevatorPrice: int, notes: z.string().max(2000).default(''),
     }).safeParse(await c.req.json().catch(() => null))
     if (!parsed.success || !(await getPlan(db, parsed.data.plan))) return c.json({ error: 'invalid' }, 400)
     const o = parsed.data
     const r = await db.query(
-      `update organisations set plan=$2, trial_ends_on=$3, max_techs=$4, max_elevators=$5, price_monthly=$6, extra_tech_price=$7, extra_elevator_price=$8, notes=$9 where id=$1 returning id`,
-      [pid(c), o.plan, o.trialEndsOn ?? null, o.maxTechs, o.maxElevators, o.priceMonthly, o.extraTechPrice, o.extraElevatorPrice, o.notes],
+      `update organisations set plan=$2, trial_ends_on=$3, max_techs=$4, max_elevators=$5, price_monthly=$6, extra_tech_price=$7, extra_elevator_price=$8, notes=$9, subscription_ends_on=$10 where id=$1 and kind='client' returning id`,
+      [pid(c), o.plan, o.trialEndsOn ?? null, o.maxTechs, o.maxElevators, o.priceMonthly, o.extraTechPrice, o.extraElevatorPrice, o.notes, o.subscriptionEndsOn ?? null],
     )
     if (!r.rows.length) return c.json({ error: 'not_found' }, 404)
     await audit(pid(c), who.userId, 'operator.org.offer', undefined, pid(c), { plan: o.plan, priceMonthly: o.priceMonthly })
     return c.json({ ok: true, org: (await loadOrgs(db, pid(c)))[0] })
   })
 
-  /* ---------- suspension ---------- */
+  /* ---------- suspension (motif listé en base ; un paiement ne lève que certains motifs) ---------- */
+  app.get('/api/operator/suspension-reasons', ...op, async (c) =>
+    c.json({ reasons: (await db.query(`select code, label, lifted_by_payment as "liftedByPayment", automatic from suspension_reasons order by sort`)).rows }))
   app.post('/api/operator/orgs/:id/suspend', ...op, async (c) => {
     const who = c.get('who')
-    const parsed = z.object({ reason: z.string().trim().max(300).default('') }).safeParse(await c.req.json().catch(() => ({})))
+    const parsed = z.object({ code: z.string().max(40).optional(), reason: z.string().trim().max(300).default('') }).safeParse(await c.req.json().catch(() => ({})))
     if (!parsed.success) return c.json({ error: 'invalid' }, 400)
-    const r = await db.query(`update organisations set status='suspended', suspended_at=now(), suspended_reason=$2 where id=$1 returning id`, [pid(c), parsed.data.reason || null])
-    if (!r.rows.length) return c.json({ error: 'not_found' }, 404)
-    await audit(pid(c), who.userId, 'operator.org.suspend', undefined, pid(c), { reason: parsed.data.reason })
+    const code = parsed.data.code ?? 'other'
+    const known = (await db.query<{ label: string }>('select label from suspension_reasons where code = $1', [code])).rows[0]
+    if (!known) return c.json({ error: 'unknown_reason' }, 400)
+    if (!(await suspendOrg(db, pid(c), code, parsed.data.reason || null))) return c.json({ error: 'not_found' }, 404)
+    await audit(pid(c), who.userId, 'operator.org.suspend', undefined, pid(c), { code, reason: parsed.data.reason })
     return c.json({ ok: true })
   })
+  // un opérateur peut lever n'importe quelle suspension
   app.post('/api/operator/orgs/:id/reactivate', ...op, async (c) => {
     const who = c.get('who')
-    const r = await db.query(`update organisations set status='active', suspended_at=null, suspended_reason=null where id=$1 returning id`, [pid(c)])
+    const r = await reactivateOrg(db, pid(c))
     if (!r.rows.length) return c.json({ error: 'not_found' }, 404)
     await audit(pid(c), who.userId, 'operator.org.reactivate', undefined, pid(c))
     return c.json({ ok: true })
@@ -297,6 +311,99 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     const lines = (await billingRows()).map((o) => [month, o.name, o.offer.plan, o.status === 'active' ? 'Actif' : 'Suspendu', o.usage.techs, o.offer.maxTechs, o.usage.elevators, o.offer.maxElevators, o.usage.clients, o.usage.jobs30, o.estimate.base, o.estimate.amount - o.estimate.base, o.status === 'active' ? o.estimate.amount : 0])
     const csv = '﻿' + [head, ...lines].map((r) => r.map(cell).join(';')).join('\r\n') + '\r\n'
     return new Response(csv, { headers: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="usage-maintix-${month}.csv"`, 'cache-control': 'no-store' } })
+  })
+
+  /* ---------- réglages de paiement (clés Jèko) : jamais renvoyées en clair ---------- */
+  const mask = (v?: string) => (v ? `••••${v.slice(-4)}` : null)
+  const settingsView = async () => {
+    const st = await getSettings(db, config.secretsKey)
+    return {
+      provider: 'jeko', webhookUrl: `${config.appUrl}/api/public/jeko/webhook`,
+      apiKeyId: st['jeko.apiKeyId'] ?? '', storeId: st['jeko.storeId'] ?? '',
+      apiKeyMasked: mask(st['jeko.apiKey']), webhookSecretMasked: mask(st['jeko.webhookSecret']),
+      configured: !!(st['jeko.apiKey'] && st['jeko.apiKeyId'] && st['jeko.storeId']), webhookConfigured: !!st['jeko.webhookSecret'],
+      encryptedWith: config.secretsKey ? 'SECRETS_KEY' : 'clé générée et conservée en base',
+    }
+  }
+  app.get('/api/operator/payment-settings', ...op, async (c) => c.json(await settingsView()))
+  app.put('/api/operator/payment-settings', ...op, async (c) => {
+    const who = c.get('who')
+    const parsed = z.object({ apiKey: z.string().trim().max(500).optional(), apiKeyId: z.string().trim().max(200).optional(), storeId: z.string().trim().max(200).optional(), webhookSecret: z.string().trim().max(500).optional() }).safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) return c.json({ error: 'invalid' }, 400)
+    const map: [SettingKey, string | undefined][] = [['jeko.apiKey', parsed.data.apiKey], ['jeko.apiKeyId', parsed.data.apiKeyId], ['jeko.storeId', parsed.data.storeId], ['jeko.webhookSecret', parsed.data.webhookSecret]]
+    const changed: string[] = []
+    for (const [k, v] of map) if (v) { await setSetting(db, config.secretsKey, k, v); changed.push(k) } // un champ vide laisse la valeur actuelle
+    await audit(NIL, who.userId, 'operator.payment_settings.update', undefined, 'jeko', { changed })
+    return c.json({ ok: true, ...(await settingsView()) })
+  })
+  app.delete('/api/operator/payment-settings', ...op, async (c) => {
+    const who = c.get('who')
+    for (const k of SETTING_KEYS) await clearSetting(db, k)
+    await audit(NIL, who.userId, 'operator.payment_settings.clear', undefined, 'jeko')
+    return c.json({ ok: true, ...(await settingsView()) })
+  })
+  /** Vérifie les clés auprès de Jèko et liste les boutiques (pour retrouver le storeId). */
+  app.post('/api/operator/payment-settings/test', ...op, async (c) => {
+    const st = await getSettings(db, config.secretsKey)
+    if (!st['jeko.apiKey'] || !st['jeko.apiKeyId']) return c.json({ error: 'not_configured' }, 400)
+    try {
+      const stores = await d.makeGateway({ apiKey: st['jeko.apiKey'], apiKeyId: st['jeko.apiKeyId'], storeId: st['jeko.storeId'] ?? '' }).listStores()
+      return c.json({ ok: true, stores, storeFound: !!st['jeko.storeId'] && stores.some((x) => x.id === st['jeko.storeId']) })
+    } catch { return c.json({ error: 'jeko_unreachable_or_refused' }, 502) }
+  })
+
+  /* ---------- finances : encaissé, en attente, reste à payer ---------- */
+  app.get('/api/operator/finance', ...op, async (c) => {
+    const today = todayStr()
+    const orgs = await loadOrgs(db)
+    const month = today.slice(0, 7)
+    const paidByOrg = new Map((await db.query<{ org_id: string; total: number; last: string | null }>(`select org_id, sum(amount)::int as total, max(paid_at) as last from payments where status = 'paid' group by org_id`)).rows.map((r) => [r.org_id, r]))
+    const pendingByOrg = new Map((await db.query<{ org_id: string; total: number; n: number }>(`select org_id, sum(amount)::int as total, count(*)::int as n from payments where status = 'pending' and source = 'jeko' and created_at > now() - interval '2 days' group by org_id`)).rows.map((r) => [r.org_id, r]))
+    const total = (await db.query<{ n: number }>(`select coalesce(sum(amount), 0)::int as n from payments where status = 'paid'`)).rows[0].n
+    const thisMonth = (await db.query<{ n: number }>(`select coalesce(sum(amount), 0)::int as n from payments where status = 'paid' and to_char(paid_at, 'YYYY-MM') = $1`, [month])).rows[0].n
+    const series = (await db.query<{ month: string; amount: number }>(`select to_char(paid_at, 'YYYY-MM') as month, sum(amount)::int as amount from payments where status = 'paid' and paid_at > now() - interval '12 months' group by 1 order by 1`)).rows
+    const in30 = new Date(Date.parse(today) + 30 * 86400_000).toISOString().slice(0, 10)
+    const rows = orgs.map((o) => {
+      const sub = o.offer.subscriptionEndsOn
+      const expired = o.flags.trialExpired || o.flags.subscriptionExpired || (o.status === 'suspended' && o.suspension?.payable === true)
+      const due = expired ? o.estimate.amount : 0
+      const upcoming = !expired && !!sub && sub >= today && sub <= in30 ? o.estimate.amount : 0
+      return { orgId: o.id, name: o.name, status: o.status, plan: o.offer.plan, endsOn: sub ?? (o.offer.plan === 'essai' ? o.offer.trialEndsOn : null), monthly: o.estimate.amount, paid: paidByOrg.get(o.id)?.total ?? 0, lastPaidAt: paidByOrg.get(o.id)?.last ?? null, pending: pendingByOrg.get(o.id)?.total ?? 0, due, upcoming }
+    })
+    const recent = (await db.query(`select p.id, p.org_id as "orgId", o.name as org, p.plan, p.months, p.amount, p.status, p.source, p.method, p.reference, p.note, p.created_at as "createdAt", p.paid_at as "paidAt", p.period_end as "periodEnd"
+      from payments p join organisations o on o.id = p.org_id order by p.created_at desc limit 60`)).rows
+    return c.json({
+      currency: 'FCFA',
+      collected: { total, thisMonth, series },
+      pending: { amount: rows.reduce((t, r) => t + r.pending, 0), count: [...pendingByOrg.values()].reduce((t, r) => t + r.n, 0) },
+      outstanding: { amount: rows.reduce((t, r) => t + r.due, 0), orgs: rows.filter((r) => r.due > 0).length },
+      upcoming30: { amount: rows.reduce((t, r) => t + r.upcoming, 0), orgs: rows.filter((r) => r.upcoming > 0).length },
+      orgs: rows, recent,
+    })
+  })
+  /** Paiement reçu hors ligne (virement, espèces) : appliqué comme un paiement en ligne. */
+  app.post('/api/operator/orgs/:id/payments', ...op, async (c) => {
+    const who = c.get('who')
+    const parsed = z.object({ plan: z.string().max(30), months: z.union([z.literal(1), z.literal(3), z.literal(6), z.literal(12)]), amount: z.number().int().min(0).max(1_000_000_000).optional(), note: z.string().trim().max(300).default('') }).safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) return c.json({ error: 'invalid' }, 400)
+    const plan = await getPlan(db, parsed.data.plan)
+    const org = (await db.query('select 1 from organisations where id = $1 and kind = \'client\'', [pid(c)])).rows[0]
+    if (!plan || !org) return c.json({ error: 'not_found' }, 404)
+    const id = randomUUID()
+    await db.query(`insert into payments (id, org_id, plan, months, amount, status, source, reference, note, created_by) values ($1,$2,$3,$4,$5,'pending','manual',$6,$7,$8)`,
+      [id, pid(c), plan.code, parsed.data.months, parsed.data.amount ?? plan.priceMonthly * parsed.data.months, `MAN-${id.slice(0, 8).toUpperCase()}`, parsed.data.note || null, who.userId])
+    const r = await applyPayment(db, id)
+    await audit(pid(c), who.userId, 'operator.payment.manual', undefined, id, { plan: plan.code, months: parsed.data.months })
+    return c.json({ ok: true, ...r, paymentId: id }, 201)
+  })
+  /** Rapprochement : un paiement Jèko resté « en attente » (webhook non reçu) est confirmé à la main après vérification dans Jèko. */
+  app.post('/api/operator/payments/:id/confirm', ...op, async (c) => {
+    const who = c.get('who')
+    const p = (await db.query<{ org_id: string }>(`select org_id from payments where id = $1 and status = 'pending'`, [c.req.param('id') ?? ''])).rows[0]
+    if (!p) return c.json({ error: 'not_found' }, 404)
+    const r = await applyPayment(db, c.req.param('id') ?? '')
+    await audit(p.org_id, who.userId, 'operator.payment.confirm', undefined, c.req.param('id'))
+    return c.json({ ok: true, ...r })
   })
 
   /* ---------- opérateurs ---------- */

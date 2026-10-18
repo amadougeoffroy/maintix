@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { api, bootstrap, createOrg, invite, makeEnv, type Env } from './helpers'
+import { api, bootstrap, invite, makeEnv, type Env } from './helpers'
 
 let env: Env
 let admin: ReturnType<typeof api>

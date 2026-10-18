@@ -264,3 +264,8 @@ button.subtab { font: inherit; cursor: pointer; }
 }
 @media (min-width: 1000px) { .l-grid { grid-template-columns: repeat(4, 1fr); } }
 html { scroll-behavior: smooth; } @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+.bars { display: flex; align-items: flex-end; gap: 8px; height: 140px; }
+.bar-col { flex: 1; display: grid; grid-template-rows: 1fr auto; justify-items: center; height: 100%; gap: 4px; }
+.bar { align-self: end; width: 100%; max-width: 40px; background: var(--brand); border-radius: 6px 6px 0 0; }
+.table-wrap { overflow-x: auto; }

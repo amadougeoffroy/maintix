@@ -187,7 +187,7 @@ export interface Invoice {
   note?: string
 }
 export interface State {
-  session: { role: Role | null; techId: string | null; clientId: string | null; isAdmin?: boolean; fullName?: string; orgName?: string; operator?: boolean; orgKind?: 'client' | 'platform'; impersonating?: boolean; orgStatus?: 'active' | 'suspended'; suspendedReason?: string | null }
+  session: { role: Role | null; techId: string | null; clientId: string | null; isAdmin?: boolean; fullName?: string; orgName?: string; operator?: boolean; suspendedReasonCode?: string | null; suspendedReasonLabel?: string | null; payable?: boolean; orgKind?: 'client' | 'platform'; impersonating?: boolean; orgStatus?: 'active' | 'suspended'; suspendedReason?: string | null }
   clients: Client[]
   sites: Site[]
   elevators: Elevator[]

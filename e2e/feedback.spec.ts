@@ -32,3 +32,15 @@ test.describe('retours d’action et menu groupé', () => {
     await expect(nav.getByRole('link', { name: 'Devis' })).toBeVisible()
   })
 })
+
+test('le thème choisi survit à un rechargement', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: /Moussa/ }).click()
+  await page.goto('/#/tech/profil')
+  await page.getByRole('button', { name: 'Clair' }).click()
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await page.getByRole('button', { name: 'Auto' }).click()
+  await page.reload()
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.+/)
+})

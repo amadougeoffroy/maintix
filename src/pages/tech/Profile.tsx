@@ -2,6 +2,7 @@ import { byId, certStatus, actions, runtime, useData } from '../../store'
 import { Badge } from '../../components/ui'
 import { OrgSwitcher } from '../../components/OrgSwitcher'
 import { feedback } from '../../feedback'
+import { setTheme, type Theme } from '../../theme'
 import { NotificationSettings } from '../../components/NotificationSettings'
 import { fmtDateLong, today } from '../../util'
 
@@ -10,9 +11,8 @@ export default function Profile() {
   const me = byId(s.techs, s.session.techId)
   if (!me) return null
   const st = certStatus(me)
-  const setTheme = (t: 'light' | 'dark' | 'auto') => {
-    if (t === 'auto') document.documentElement.removeAttribute('data-theme')
-    else document.documentElement.setAttribute('data-theme', t)
+  const pickTheme = (t: Theme) => {
+    setTheme(t)
     feedback.toast(`Thème ${t === 'auto' ? 'automatique' : t === 'dark' ? 'sombre' : 'clair'} activé.`, 'info')
   }
   return (
@@ -32,9 +32,9 @@ export default function Profile() {
       <section className="stack">
         <h2>Affichage</h2>
         <div className="seg">
-          <button onClick={() => setTheme('auto')}>Auto</button>
-          <button onClick={() => setTheme('light')}>Clair</button>
-          <button onClick={() => setTheme('dark')}>Sombre</button>
+          <button onClick={() => pickTheme('auto')}>Auto</button>
+          <button onClick={() => pickTheme('light')}>Clair</button>
+          <button onClick={() => pickTheme('dark')}>Sombre</button>
         </div>
       </section>
       {!runtime.server && <button className="btn danger" onClick={async () => { if (await feedback.confirm({ tone: 'danger', title: 'Réinitialiser la démonstration ?', body: 'Toutes les modifications faites dans cette démonstration seront effacées.', confirmLabel: 'Réinitialiser' })) { actions.resetDemo(); feedback.toast('Données de démonstration réinitialisées.') } }}>Réinitialiser la démo</button>}

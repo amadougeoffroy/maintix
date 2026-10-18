@@ -7,6 +7,9 @@ import { api } from './api'
 import { bootServerSession } from './session'
 import { loadStore, runtime } from './store'
 import './index.css'
+import { getTheme, setTheme } from './theme'
+
+setTheme(getTheme(), false) // thème choisi par l'utilisateur, avant le premier rendu
 
 registerSW({ immediate: true })
 

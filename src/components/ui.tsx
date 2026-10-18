@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import QRCode from 'qrcode'
 import { compressImage } from '../util'
-import { saveBlob, useImageSrc } from '../files'
+import { dataUrlToBlob, saveBlob, useImageSrc } from '../files'
+import { feedback } from '../feedback'
 import { Icon } from './Icon'
 import { healthLevel } from '../store'
 import type { JobStatus, JobType, Severity } from '../types'
@@ -78,8 +79,13 @@ export function PhotoPicker({ photos, onAdd, label = 'Ajouter une photo' }: { ph
         hidden
         onChange={async (e) => {
           const f = e.target.files?.[0]
-          if (f) onAdd(await saveBlob(await (await fetch(await compressImage(f))).blob()))
-          e.target.value = ''
+          const input = e.target
+          try {
+            if (f) onAdd(await saveBlob(dataUrlToBlob(await compressImage(f))))
+          } catch {
+            feedback.toast('Cette photo n’a pas pu être chargée. Réessayez ou choisissez un autre fichier (JPEG ou PNG).', 'error')
+          }
+          input.value = ''
         }}
       />
       <button type="button" className="btn" onClick={() => ref.current?.click()}>
@@ -93,20 +99,39 @@ export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) 
   const ref = useRef<HTMLCanvasElement>(null)
   const drawing = useRef(false)
   const [empty, setEmpty] = useState(true)
+  // (re)dimensionne le canvas à sa taille réelle, en conservant le tracé déjà fait
   useEffect(() => {
     const c = ref.current!
-    const ratio = window.devicePixelRatio || 1
-    c.width = c.clientWidth * ratio
-    c.height = c.clientHeight * ratio
-    const ctx = c.getContext('2d')!
-    ctx.scale(ratio, ratio)
-    ctx.lineWidth = 2.5
-    ctx.lineCap = 'round'
-    ctx.strokeStyle = '#111'
+    const fit = () => {
+      const ratio = window.devicePixelRatio || 1
+      const w = Math.round(c.clientWidth * ratio)
+      const h = Math.round(c.clientHeight * ratio)
+      if (!w || !h || (c.width === w && c.height === h)) return
+      const keep = c.width && c.height ? c.toDataURL() : null
+      c.width = w
+      c.height = h
+      const ctx = c.getContext('2d')!
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
+      ctx.lineWidth = 2.5
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.strokeStyle = '#111'
+      if (keep) { const img = new Image(); img.onload = () => ctx.drawImage(img, 0, 0, c.clientWidth, c.clientHeight); img.src = keep }
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(c)
+    return () => ro.disconnect()
   }, [])
   const pos = (e: React.PointerEvent) => {
     const r = ref.current!.getBoundingClientRect()
     return { x: e.clientX - r.left, y: e.clientY - r.top }
+  }
+  const end = () => {
+    if (!drawing.current) return
+    drawing.current = false
+    setEmpty(false)
+    onChange(ref.current!.toDataURL('image/png'))
   }
   return (
     <div className="stack">
@@ -115,12 +140,15 @@ export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) 
         className="sig"
         aria-label="Zone de signature"
         onPointerDown={(e) => {
+          e.preventDefault()
           drawing.current = true
-          ref.current!.setPointerCapture(e.pointerId)
+          try { ref.current!.setPointerCapture(e.pointerId) } catch { /* certains navigateurs refusent la capture */ }
           const ctx = ref.current!.getContext('2d')!
           const p = pos(e)
           ctx.beginPath()
           ctx.moveTo(p.x, p.y)
+          ctx.lineTo(p.x + 0.01, p.y) // un simple point reste visible
+          ctx.stroke()
         }}
         onPointerMove={(e) => {
           if (!drawing.current) return
@@ -129,12 +157,9 @@ export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) 
           ctx.lineTo(p.x, p.y)
           ctx.stroke()
         }}
-        onPointerUp={() => {
-          if (!drawing.current) return
-          drawing.current = false
-          setEmpty(false)
-          onChange(ref.current!.toDataURL('image/png'))
-        }}
+        onPointerUp={end}
+        onPointerCancel={end}
+        onLostPointerCapture={end}
       />
       <button
         type="button"
@@ -142,7 +167,11 @@ export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) 
         disabled={empty}
         onClick={() => {
           const c = ref.current!
-          c.getContext('2d')!.clearRect(0, 0, c.width, c.height)
+          const ctx = c.getContext('2d')!
+          ctx.save()
+          ctx.setTransform(1, 0, 0, 1, 0, 0)
+          ctx.clearRect(0, 0, c.width, c.height)
+          ctx.restore()
           setEmpty(true)
           onChange(null)
         }}
@@ -178,7 +207,11 @@ export function VoiceButton({ onText }: { onText: (t: string) => void }) {
         r.interimResults = false
         r.onresult = (ev) => onText(ev.results[0][0].transcript)
         r.onend = () => setOn(false)
-        r.onerror = () => setOn(false)
+        r.onerror = (ev) => {
+          setOn(false)
+          const code = ev.error
+          feedback.toast(code === 'not-allowed' || code === 'service-not-allowed' ? 'Micro refusé : autorisez-le dans les réglages du navigateur.' : code === 'no-speech' ? 'Aucune voix détectée, réessayez.' : 'La dictée vocale n’a pas pu démarrer sur cet appareil.', 'error')
+        }
         setOn(true)
         r.start()
       }}
@@ -192,7 +225,7 @@ interface SR {
   interimResults: boolean
   onresult: (e: { results: { 0: { 0: { transcript: string } } } }) => void
   onend: () => void
-  onerror: () => void
+  onerror: (e: { error?: string }) => void
   start: () => void
 }
 

@@ -311,7 +311,13 @@ function SignStep({ job, summary, missing, busy, onFinish }: { job: Job; summary
               <SignaturePad onChange={setSig} />
             </>
           )}
-          <button className="btn primary block" disabled={!canSign} onClick={async () => { await (async () => actions.updateVisit(job.id, { signature: { absent, dataUrl: sig ? await saveDataUrl(sig) : undefined, name: absent ? undefined : name, role: absent ? undefined : role, photo, at: new Date().toISOString() } }))(); feedback.toast('Signature validée.') }}>Valider la signature</button>
+          <button className="btn primary block" disabled={!canSign} onClick={async () => {
+            try {
+              const dataUrl = sig ? await saveDataUrl(sig) : undefined
+              actions.updateVisit(job.id, { signature: { absent, dataUrl, name: absent ? undefined : name, role: absent ? undefined : role, photo, at: new Date().toISOString() } })
+              feedback.toast(absent ? 'Client absent enregistré.' : 'Signature validée.')
+            } catch { feedback.toast('La signature n’a pas pu être enregistrée. Effacez-la et signez à nouveau.', 'error') }
+          }}>Valider la signature</button>
         </div>
       ) : (
         <div className="card row between">

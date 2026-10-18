@@ -31,12 +31,19 @@ export const blobToDataUrl = (blob: Blob) =>
     r.readAsDataURL(blob)
   })
 
-export async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
-  return (await fetch(dataUrl)).blob()
+/** Décode une data-URL sans `fetch` : la CSP du serveur (`connect-src 'self'`) l'interdit. */
+export function dataUrlToBlob(dataUrl: string): Blob {
+  const [head, body = ''] = dataUrl.split(',')
+  const type = /^data:([^;]+)/.exec(head)?.[1] ?? 'application/octet-stream'
+  if (!/;base64/.test(head)) return new Blob([decodeURIComponent(body)], { type })
+  const bin = atob(body)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return new Blob([bytes], { type })
 }
 /** Convertit une data-URL (signature, photo) en référence. */
 export async function saveDataUrl(dataUrl: string): Promise<string> {
-  return runtime.server ? saveBlob(await dataUrlToBlob(dataUrl)) : dataUrl
+  return runtime.server ? saveBlob(dataUrlToBlob(dataUrl)) : dataUrl
 }
 
 /** Envoie au serveur les fichiers en attente. Lève une erreur réseau pour que la synchro réessaie plus tard. */

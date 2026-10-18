@@ -8,6 +8,7 @@ import { suggestFromNote, type NoteSuggestions } from '../../notes'
 import { itemByKey } from '../../checklist'
 import type { ItemStatus, Job } from '../../types'
 import { Icon } from '../../components/Icon'
+import { feedback } from '../../feedback'
 
 type Step = { k: 'safety' } | { k: 'zone'; zone: Zone } | { k: 'measures' } | { k: 'diag' } | { k: 'parts' } | { k: 'sign' }
 const stepLabel = (st: Step): React.ReactNode =>
@@ -59,7 +60,7 @@ export default function Visit() {
         )}
         <div className="grid2">
           <a className="btn" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(site.address)}`} target="_blank" rel="noreferrer" onClick={() => job.status === 'planifiee' && actions.setStatus(job.id, 'en_route')}><Icon n="compass" /> Y aller</a>
-          <button className="btn primary" disabled={!!certs && !certs.ok} onClick={() => actions.setStatus(job.id, 'sur_place')}><Icon n="mappin" /> Je suis sur place</button>
+          <button className="btn primary" disabled={!!certs && !certs.ok} onClick={() => { actions.setStatus(job.id, 'sur_place'); feedback.toast('Arrivée enregistrée : vous êtes sur place.') }}><Icon n="mappin" /> Je suis sur place</button>
         </div>
       </div>
     )
@@ -121,7 +122,7 @@ export default function Visit() {
             <textarea value={v.notes} onChange={(e) => actions.updateVisit(job.id, { notes: e.target.value })} placeholder="Ex. galet de porte palière 9e cassé, remplacé, essais OK" />
           </label>
           <VoiceButton onText={(t) => actions.updateVisit(job.id, { notes: `${v.notes} ${t}`.trim() })} />
-          <PhotoPicker photos={v.checklist.diag?.photos ?? []} onAdd={(p) => actions.answer(job.id, 'diag', { status: 'ok', photos: [...(v.checklist.diag?.photos ?? []), p] })} />
+          <PhotoPicker photos={v.checklist.diag?.photos ?? []} onAdd={(p) => { actions.answer(job.id, 'diag', { status: 'ok', photos: [...(v.checklist.diag?.photos ?? []), p] }); feedback.toast('Photo ajoutée.') }} />
         </div>
       )}
 
@@ -169,7 +170,7 @@ function ZoneStep({ job, zone }: { job: Job; zone: Zone }) {
               <div className="stack">
                 <textarea placeholder="Précision (optionnel)" value={a.note ?? ''} onChange={(e) => actions.answer(job.id, it.key, { note: e.target.value })} />
                 <VoiceButton onText={(t) => actions.answer(job.id, it.key, { note: `${a.note ?? ''} ${t}`.trim() })} />
-                <PhotoPicker photos={a.photos} onAdd={(p) => actions.answer(job.id, it.key, { photos: [...a.photos, p] })} label={a.status === 'ko' && a.photos.length === 0 ? 'Photo requise' : 'Ajouter une photo'} />
+                <PhotoPicker photos={a.photos} onAdd={(p) => { actions.answer(job.id, it.key, { photos: [...a.photos, p] }); feedback.toast('Photo ajoutée.') }} label={a.status === 'ko' && a.photos.length === 0 ? 'Photo requise' : 'Ajouter une photo'} />
               </div>
             )}
           </div>
@@ -223,6 +224,7 @@ function PartsStep({ job }: { job: Job }) {
     actions.updateVisit(job.id, { parts, ...(sg.emergencyCallTest && !v.emergencyCallTest ? { emergencyCallTest: sg.emergencyCallTest } : {}) })
     if (job.type === 'entretien') for (const it of sg.items) if (v.checklist[it.key]?.status !== 'ko') actions.answer(job.id, it.key, { status: it.status, note: it.note })
     setSugg(null)
+    feedback.toast('Suggestions appliquées à la visite.')
   }
   const add = (name: string) => {
     const ex = v.parts.find((p) => p.name === name)
@@ -309,12 +311,12 @@ function SignStep({ job, summary, missing, busy, onFinish }: { job: Job; summary
               <SignaturePad onChange={setSig} />
             </>
           )}
-          <button className="btn primary block" disabled={!canSign} onClick={async () => actions.updateVisit(job.id, { signature: { absent, dataUrl: sig ? await saveDataUrl(sig) : undefined, name: absent ? undefined : name, role: absent ? undefined : role, photo, at: new Date().toISOString() } })}>Valider la signature</button>
+          <button className="btn primary block" disabled={!canSign} onClick={async () => { await (async () => actions.updateVisit(job.id, { signature: { absent, dataUrl: sig ? await saveDataUrl(sig) : undefined, name: absent ? undefined : name, role: absent ? undefined : role, photo, at: new Date().toISOString() } }))(); feedback.toast('Signature validée.') }}>Valider la signature</button>
         </div>
       ) : (
         <div className="card row between">
           <span>{v.signature!.absent ? <><Icon n="door" /> Client absent (photo enregistrée)</> : <><Icon n="pen" /> Signé par {v.signature!.name}</>}</span>
-          <button className="btn sm" onClick={() => actions.updateVisit(job.id, { signature: undefined })}>Refaire</button>
+          <button className="btn sm" onClick={() => { actions.updateVisit(job.id, { signature: undefined }); feedback.toast('Signature effacée.', 'info') }}>Refaire</button>
         </div>
       )}
       {missing.length > 0 && (

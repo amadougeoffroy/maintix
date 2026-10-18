@@ -3,6 +3,7 @@ import { Badge } from '../../components/ui'
 import { Icon } from '../../components/Icon'
 import { applyIndexation, autoRenew, contractStatus, indexationDue, indexedPrice, nextIndexation, noticeDeadline, noticeMonths, renew, STATUS_LABEL, terminate, termEnd, termMonths, type ContractStatus } from '../../contracts'
 import { fcfa, fmtDateLong, today } from '../../util'
+import { feedback } from '../../feedback'
 
 const TONE: Record<ContractStatus, 'ok' | 'warn' | 'bad' | 'brand' | undefined> = { actif: 'ok', preavis_proche: 'warn', preavis_depasse: 'brand', echu: 'bad', resilie: undefined }
 const ORDER: ContractStatus[] = ['echu', 'preavis_proche', 'actif', 'preavis_depasse', 'resilie']
@@ -35,9 +36,9 @@ export default function Contracts() {
               {(c.priceHistory?.length ?? 0) > 0 && <details><summary className="small">Historique des prix</summary><ul className="small" style={{ margin: '6px 0 0', paddingLeft: 18 }}>{c.priceHistory!.map((h, i) => <li key={i}>{fmtDateLong(h.date)} : {fcfa(h.from)} → {fcfa(h.to)} (+{h.rate} %)</li>)}</ul></details>}
               {st !== 'resilie' && (
                 <div className="row wrap">
-                  {due && <button className="btn sm primary" onClick={() => { if (confirm(`Passer ${fcfa(c.priceMonthly)} à ${fcfa(indexedPrice(c))} par mois ?`)) actions.upsertContract(applyIndexation(c, on)) }}>Appliquer l’indexation → {fcfa(indexedPrice(c))}</button>}
-                  {!autoRenew(c) && <button className="btn sm" onClick={() => actions.upsertContract(renew(c))}><Icon n="check" /> Renouveler d’un terme</button>}
-                  <button className="btn sm" onClick={() => { if (confirm(`Résilier le contrat de ${cl.name} ? Les visites planifiées restent à annuler.`)) actions.upsertContract(terminate(c, on)) }}>Résilier</button>
+                  {due && <button className="btn sm primary" onClick={async () => { if (await feedback.confirm({ title: 'Appliquer l’indexation ?', body: `Le prix mensuel de ${cl.name} passe de ${fcfa(c.priceMonthly)} à ${fcfa(indexedPrice(c))} (+${c.indexation} %). L’ancien prix est conservé dans l’historique.`, confirmLabel: 'Appliquer' })) { actions.upsertContract(applyIndexation(c, on)); feedback.toast(`Indexation appliquée : ${fcfa(indexedPrice(c))} par mois.`) } }}>Appliquer l’indexation → {fcfa(indexedPrice(c))}</button>}
+                  {!autoRenew(c) && <button className="btn sm" onClick={() => { actions.upsertContract(renew(c)); feedback.toast(`Contrat de ${cl.name} renouvelé d’un terme.`) }}><Icon n="check" /> Renouveler d’un terme</button>}
+                  <button className="btn sm" onClick={async () => { if (await feedback.confirm({ tone: 'danger', title: `Résilier le contrat de ${cl.name} ?`, body: 'Le contrat est clôturé à ce jour. Les visites déjà planifiées ne sont pas annulées automatiquement : pensez à les retirer du planning.', confirmLabel: 'Résilier le contrat', cancelLabel: 'Garder' })) { actions.upsertContract(terminate(c, on)); feedback.toast(`Contrat de ${cl.name} résilié.`, 'info') } }}>Résilier</button>
                 </div>
               )}
             </div>

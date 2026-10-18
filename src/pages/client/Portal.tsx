@@ -6,6 +6,7 @@ import { STATUS_LABEL as INV_LABEL, totals } from '../../invoicing'
 import { runtime } from '../../store'
 import { fcfa, fmtDate, fmtDateLong, today } from '../../util'
 import { Icon } from '../../components/Icon'
+import { feedback } from '../../feedback'
 
 export default function Portal() {
   const s = useData()
@@ -43,7 +44,7 @@ export default function Portal() {
             <div key={q.id} className="card stack">
               <div className="row between"><strong>{byId(s.elevators, q.elevatorId)?.label}</strong><strong>{fcfa(quoteTotal(q) * 1.2)} TTC</strong></div>
               <ul style={{ margin: 0, paddingLeft: 18 }}>{q.lines.map((l, i) => <li key={i}>{l.qty} × {l.label}</li>)}</ul>
-              {q.status === 'envoye' ? <button className="btn primary" onClick={() => actions.updateQuote(q.id, { status: 'accepte' })}><Icon n="check" /> Accepter ce devis</button> : <Badge tone="ok">Accepté</Badge>}
+              {q.status === 'envoye' ? <button className="btn primary" onClick={() => { actions.updateQuote(q.id, { status: 'accepte' }); feedback.toast('Devis accepté. Merci : l’entreprise en est informée.') }}><Icon n="check" /> Accepter ce devis</button> : <Badge tone="ok">Accepté</Badge>}
             </div>
           ))}
         </section>

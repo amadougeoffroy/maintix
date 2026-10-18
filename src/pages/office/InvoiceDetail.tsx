@@ -1,10 +1,10 @@
-import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../../api'
 import { actions, byId, runtime, useData } from '../../store'
 import { Badge } from '../../components/ui'
 import { Icon } from '../../components/Icon'
 import { History } from '../../components/History'
+import { feedback } from '../../feedback'
 import { isLocked, lineTotal, STATUS_LABEL, totals } from '../../invoicing'
 import { issueInvoice } from '../../invoice-actions'
 import { fcfa, fmtDateLong, today } from '../../util'
@@ -14,7 +14,6 @@ export default function InvoiceDetail() {
   const { id } = useParams()
   const s = useData()
   const nav = useNavigate()
-  const [msg, setMsg] = useState('')
   const inv = byId(s.invoices, id)
   if (!inv) return <p>Facture introuvable. <Link to="/office/invoices">Retour</Link></p>
   const org = s.settings[0]
@@ -25,8 +24,8 @@ export default function InvoiceDetail() {
   const setLine = (i: number, patch: Partial<Invoice['lines'][number]>) => set({ lines: inv.lines.map((l, n) => (n === i ? { ...l, ...patch } : l)) })
 
   const send = async () => {
-    try { const r = await api.sendInvoice(inv.id); setMsg(`Facture envoyée à ${r.to.join(', ')}.`) }
-    catch (e) { setMsg(e instanceof ApiError && e.code === 'no_recipient' ? 'Ce client n’a pas d’adresse e-mail.' : 'Envoi impossible pour le moment.') }
+    try { const r = await api.sendInvoice(inv.id); feedback.toast(`Facture envoyée à ${r.to.join(', ')}.`) }
+    catch (e) { feedback.toast(e instanceof ApiError && e.code === 'no_recipient' ? 'Ce client n’a pas d’adresse e-mail.' : 'Envoi impossible pour le moment.', 'error') }
   }
 
   return (
@@ -35,20 +34,19 @@ export default function InvoiceDetail() {
         <div><Link to="/office/invoices" className="small">← Factures</Link><h1>{inv.number ?? 'Brouillon de facture'} <Badge tone={inv.status === 'payee' ? 'ok' : inv.status === 'annulee' ? 'bad' : inv.status === 'emise' ? 'brand' : undefined}>{STATUS_LABEL[inv.status]}</Badge></h1></div>
         <div className="row wrap">
           {inv.status === 'brouillon' && <>
-            <button className="btn primary" onClick={async () => { const r = await issueInvoice(inv.id); setMsg(r.ok ? '' : r.error) }}>Émettre la facture</button>
-            <button className="btn" onClick={() => { if (confirm('Supprimer ce brouillon ?') && actions.deleteInvoice(inv.id)) nav('/office/invoices') }}><Icon n="trash" /> Supprimer</button>
+            <button className="btn primary" onClick={async () => { const r = await issueInvoice(inv.id); if (r.ok) feedback.toast('Facture émise et numérotée.'); else feedback.toast(r.error, 'error') }}>Émettre la facture</button>
+            <button className="btn" onClick={async () => { if (await feedback.confirm({ tone: 'danger', title: 'Supprimer ce brouillon ?', body: 'Le brouillon sera supprimé définitivement. Une facture émise, elle, ne peut jamais être supprimée.', confirmLabel: 'Supprimer le brouillon', cancelLabel: 'Garder' }) && actions.deleteInvoice(inv.id)) { feedback.toast('Brouillon supprimé.'); nav('/office/invoices') } }}><Icon n="trash" /> Supprimer</button>
           </>}
           {inv.status !== 'brouillon' && <>
             <button className="btn" onClick={() => window.print()}><Icon n="printer" /> Imprimer</button>
             {runtime.server && <a className="btn" href={`/api/invoices/${inv.id}/pdf`} target="_blank" rel="noreferrer"><Icon n="file" /> PDF</a>}
             {runtime.server && <button className="btn" onClick={send}><Icon n="mail" /> Envoyer au client</button>}
           </>}
-          {inv.status === 'emise' && <button className="btn" onClick={() => set({ status: 'payee', paidAt: today() })}><Icon n="check" /> Marquer payée</button>}
-          {inv.status === 'payee' && <button className="btn" onClick={() => set({ status: 'emise', paidAt: undefined })}>Annuler le paiement</button>}
-          {inv.status === 'emise' && <button className="btn" onClick={() => { if (confirm('Annuler cette facture ? Elle reste conservée avec son numéro.')) set({ status: 'annulee' }) }}>Annuler la facture</button>}
+          {inv.status === 'emise' && <button className="btn" onClick={() => { set({ status: 'payee', paidAt: today() }); feedback.toast(`Facture ${inv.number} marquée payée.`) }}><Icon n="check" /> Marquer payée</button>}
+          {inv.status === 'payee' && <button className="btn" onClick={() => { set({ status: 'emise', paidAt: undefined }); feedback.toast('Paiement annulé : la facture est de nouveau à encaisser.', 'info') }}>Annuler le paiement</button>}
+          {inv.status === 'emise' && <button className="btn" onClick={async () => { if (await feedback.confirm({ tone: 'danger', title: 'Annuler cette facture ?', body: `La facture ${inv.number} reste conservée avec son numéro mais ne sera plus due. Cette action ne peut pas être annulée.`, confirmLabel: 'Annuler la facture', cancelLabel: 'Garder' })) { set({ status: 'annulee' }); feedback.toast(`Facture ${inv.number} annulée.`, 'info') } }}>Annuler la facture</button>}
         </div>
       </div>
-      {msg && <div className="card no-print" role="status">{msg}</div>}
 
       {!locked && (
         <section className="card stack no-print">

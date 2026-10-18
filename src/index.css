@@ -199,3 +199,10 @@ main:focus { outline: none; }
 .subtab.on { background: var(--brand); color: var(--brand-ink); border-color: transparent; }
 button.subtab { font: inherit; cursor: pointer; }
 .content { overflow-x: clip; }
+
+/* navigation groupée */
+.nav-groups { display: grid; gap: 6px; }
+.nav-group-head { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px 6px; background: none; border: 0; color: var(--muted); font: inherit; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; border-radius: 8px; }
+.nav-group-head:hover { color: var(--text); } .nav-group-head svg { transition: transform .15s; transform: rotate(-90deg); } .nav-group-head svg.open { transform: none; }
+.nav-group-links { display: grid; gap: 2px; }
+.more-head { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }

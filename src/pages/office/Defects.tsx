@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { actions, byId, useData } from '../../store'
 import { Badge, SeverityBadge } from '../../components/ui'
+import { feedback } from '../../feedback'
 import { fmtDate, today } from '../../util'
 import { Icon } from '../../components/Icon'
 
@@ -38,9 +39,9 @@ export default function Defects() {
                   {d.status === 'ouvert' && <button className="btn sm" onClick={() => {
                     const site = byId(s.sites, e.siteId)!
                     const q = actions.createQuote({ clientId: site.clientId, elevatorId: e.id, defectId: d.id, lines: [{ label: d.title, qty: 1, unit: 0 }, { label: 'Main-d’œuvre', qty: 2, unit: 25000 }] })
-                    nav(`/office/quotes?open=${q.id}`)
+                    feedback.toast('Devis créé à partir du défaut : complétez les montants.'); nav(`/office/quotes?open=${q.id}`)
                   }}><Icon n="euro" /> Créer un devis</button>}
-                  <button className="btn sm" onClick={() => actions.setDefectStatus(d.id, 'leve')}><Icon n="check" /> Marquer comme levé</button>
+                  <button className="btn sm" onClick={() => { actions.setDefectStatus(d.id, 'leve'); feedback.toast('Défaut marqué comme levé.') }}><Icon n="check" /> Marquer comme levé</button>
                 </div>
               )}
               {d.status === 'leve' && <Badge tone="ok">Levé</Badge>}

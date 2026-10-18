@@ -4,6 +4,7 @@ import { Badge, JOB_LABEL, StatusBadge } from '../../components/ui'
 import { addDays, fmtDate, today, weekStart } from '../../util'
 import type { JobType } from '../../types'
 import { Icon } from '../../components/Icon'
+import { feedback } from '../../feedback'
 
 export default function Planning() {
   const s = useData()
@@ -20,8 +21,9 @@ export default function Planning() {
   const TechSelect = ({ jobId, value, jobDate }: { jobId: string; value: string | null; jobDate: string }) => (
     <select aria-label="Technicien" value={value ?? ''} onChange={(e) => {
       const t = byId(s.techs, e.target.value)
-      if (t && !certStatus(t, jobDate).ok) { alert(`${t.name} a une habilitation expirée (${certStatus(t, jobDate).expired.map((c) => c.label).join(', ')}) : affectation impossible.`); return }
+      if (t && !certStatus(t, jobDate).ok) { feedback.dialog({ tone: 'error', title: 'Affectation impossible', body: `${t.name} a une habilitation expirée (${certStatus(t, jobDate).expired.map((c) => c.label).join(', ')}) : il ne peut pas être affecté à cette mission. Renouvelez l’habilitation dans Réglages → Équipe.` }); return }
       actions.assign(jobId, e.target.value || null)
+      feedback.toast(t ? `Mission affectée à ${t.name}.` : 'Mission désaffectée.', t ? 'ok' : 'info')
     }}>
       <option value="">— Non affecté —</option>
       {techs.map((t) => <option key={t.id} value={t.id}>{t.name}{certStatus(t, jobDate).ok ? '' : ' (habilitation expirée)'}</option>)}
@@ -45,7 +47,7 @@ export default function Planning() {
           {unassigned.map((j) => (
             <div key={j.id} className="row wrap">
               <span className="grow">{JOB_LABEL[j.type]} · {byId(s.elevators, j.elevatorId)?.label} · {fmtDate(j.date)}</span>
-              {suggested && <button className="btn sm" onClick={() => actions.assign(j.id, suggested.id)}>Affecter à {suggested.name}</button>}
+              {suggested && <button className="btn sm" onClick={() => { actions.assign(j.id, suggested.id); feedback.toast(`Mission affectée à ${suggested.name} (astreinte).`) }}>Affecter à {suggested.name}</button>}
               <TechSelect jobId={j.id} value={j.techId} jobDate={j.date} />
             </div>
           ))}
@@ -66,9 +68,9 @@ export default function Planning() {
                     <div className="grow"><strong>{e.label}</strong> <span className="muted small">{byId(s.sites, e.siteId)?.name}</span><br /><Badge tone={j.type === 'depannage' ? 'bad' : 'brand'}>{JOB_LABEL[j.type]}</Badge> <StatusBadge s={j.status} /></div>
                     {j.status !== 'terminee' ? (
                       <div className="row wrap">
-                        <input type="date" aria-label="Reporter à" value={j.date} style={{ width: 160 }} onChange={(e) => e.target.value && actions.assign(j.id, j.techId, e.target.value)} />
+                        <input type="date" aria-label="Reporter à" value={j.date} style={{ width: 160 }} onChange={(e) => { if (!e.target.value) return; actions.assign(j.id, j.techId, e.target.value); feedback.toast(`Mission reportée au ${fmtDate(e.target.value)}.`) }} />
                         <TechSelect jobId={j.id} value={j.techId} jobDate={j.date} />
-                        {j.status === 'planifiee' && <button className="btn sm" aria-label="Annuler la mission" onClick={() => confirm('Annuler cette mission ?') && actions.cancelJob(j.id)}><Icon n="trash" /></button>}
+                        {j.status === 'planifiee' && <button className="btn sm" aria-label="Annuler la mission" onClick={async () => { if (await feedback.confirm({ tone: 'danger', title: 'Supprimer cette mission ?', body: `La mission du ${fmtDate(j.date)} sur ${e.label} sera retirée du planning${j.techId ? ` et ${byId(s.techs, j.techId)?.name} ne la verra plus` : ''}. Cette action est définitive.`, confirmLabel: 'Supprimer la mission', cancelLabel: 'Garder' })) { actions.cancelJob(j.id); feedback.toast('Mission supprimée du planning.') } }}><Icon n="trash" /></button>}
                       </div>
                     ) : <span className="small muted">{byId(s.techs, j.techId)?.name}</span>}
                   </div>
@@ -79,7 +81,7 @@ export default function Planning() {
         })}
       </div>
 
-      <form className="card stack" onSubmit={(e) => { e.preventDefault(); actions.createJob({ type, elevatorId: el, techId: tech || null, date }) }}>
+      <form className="card stack" onSubmit={(e) => { e.preventDefault(); actions.createJob({ type, elevatorId: el, techId: tech || null, date }); feedback.toast(`${JOB_LABEL[type]} planifié le ${fmtDate(date)} sur ${byId(s.elevators, el)?.label}${tech ? ` (${byId(s.techs, tech)?.name})` : ''}.`) }}>
         <h2>Planifier une mission</h2>
         <div className="grid2">
           <label className="field">Appareil<select value={el} onChange={(e) => setEl(e.target.value)}>{s.elevators.map((x) => <option key={x.id} value={x.id}>{x.label} – {byId(s.sites, x.siteId)?.name}</option>)}</select></label>

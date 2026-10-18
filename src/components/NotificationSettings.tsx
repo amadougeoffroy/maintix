@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { runtime } from '../store'
+import { feedback } from '../feedback'
 
 const b64 = (s: string) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(s.length / 4) * 4, '=')), (c) => c.charCodeAt(0))
 const arr = (buf: ArrayBuffer | null) => (buf ? btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') : '')
@@ -11,7 +12,7 @@ export function NotificationSettings() {
   const [perm, setPerm] = useState<NotificationPermission | 'unsupported'>('default')
   const [subscribed, setSubscribed] = useState(false)
   const [phone, setPhone] = useState('')
-  const [msg, setMsg] = useState('')
+  const setMsg = (t: string) => feedback.toast(t, /impossible|refusée|invalide|pas configur/i.test(t) ? 'error' : 'ok')
   const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
 
   const refresh = async () => {
@@ -69,7 +70,7 @@ export function NotificationSettings() {
         <label className="field">Téléphone pour les alertes par SMS {cfg && !cfg.smsConfigured && <span className="muted small">(SMS non configurés sur le serveur)</span>}
           <div className="row"><input inputMode="tel" placeholder="+33612345678" value={phone} onChange={(e) => setPhone(e.target.value)} /><button className="btn sm" onClick={savePhone}>Enregistrer</button></div>
         </label>
-        <div className="row wrap"><button className="btn sm" onClick={test}>Envoyer un test</button>{msg && <span role="status" className="small">{msg}</span>}</div>
+        <div className="row wrap"><button className="btn sm" onClick={test}>Envoyer un test</button></div>
       </div>
     </section>
   )

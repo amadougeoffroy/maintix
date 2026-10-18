@@ -1,3 +1,4 @@
+import { feedback } from './feedback'
 import { useSyncExternalStore } from 'react'
 import { del, get, set } from 'idb-keyval'
 import { api, ApiError, type PushResult, type RemoteDoc } from './api'
@@ -75,7 +76,10 @@ async function flush() {
       // si l'utilisateur a modifié le document entre-temps, la nouvelle version reste en file
       if (outbox.get(keyOf(sent)) === sent) outbox.delete(keyOf(sent))
       if (!r.ok && r.doc) rejected.push({ collection: r.collection, id: r.id, data: r.doc.data, deleted: r.doc.deleted, seq: r.doc.seq })
-      if (!r.ok) setStatus({ lastError: `Modification refusée (${r.reason ?? 'inconnue'}) : ${r.collection}` })
+      if (!r.ok) {
+        setStatus({ lastError: `Modification refusée (${r.reason ?? 'inconnue'}) : ${r.collection}` })
+        feedback.toast('Une modification a été refusée par le serveur ; la version du serveur a été restaurée.', 'error')
+      }
     })
     if (rejected.length) applyRemoteDocs(rejected) // la version serveur fait foi
     setStatus({ pending: outbox.size })

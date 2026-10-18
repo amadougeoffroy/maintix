@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../../api'
 import { Logo } from '../../brand/Logo'
+import { feedback } from '../../feedback'
 import { actions, byId, runtime, useData } from '../../store'
 import { Icon } from '../../components/Icon'
 
@@ -34,7 +35,7 @@ export default function Signal() {
             <Link className="btn primary" to={`/status/${el.id}`}>Suivre l’intervention</Link>
           </div>
         ) : (
-          <form className="card stack" onSubmit={async (e) => { e.preventDefault(); const b = { elevatorId: el.id, description: desc || 'Panne signalée', trapped, reporter: who }; try { if (runtime.server) await api.report(b); else actions.report(b); setDone(true) } catch { alert('Envoi impossible pour le moment. Si une personne est bloquée, appelez les secours (18 / 112).') } }}>
+          <form className="card stack" onSubmit={async (e) => { e.preventDefault(); const b = { elevatorId: el.id, description: desc || 'Panne signalée', trapped, reporter: who }; try { if (runtime.server) await api.report(b); else actions.report(b); setDone(true) } catch { feedback.dialog({ tone: 'error', title: 'Envoi impossible', body: 'Le signalement n’a pas pu être envoyé. Si une personne est bloquée, appelez les secours (18 / 112).' }) } }}>
             <button type="button" className={`btn block ${trapped ? 'danger' : ''}`} onClick={() => setTrapped(!trapped)} aria-pressed={trapped}>{trapped ? <><Icon n="siren" /> Une personne est bloquée dans la cabine</> : 'Une personne est-elle bloquée ? (appuyer si oui)'}</button>
             {trapped && <p className="small"><strong>En cas de danger, appelez les secours (18 / 112).</strong> Rassurez la personne, ne forcez jamais les portes.</p>}
             <label className="field">Que se passe-t-il ?<textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Ex. la porte ne se ferme plus au 3e étage" /></label>

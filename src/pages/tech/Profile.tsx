@@ -1,6 +1,7 @@
 import { byId, certStatus, actions, runtime, useData } from '../../store'
 import { Badge } from '../../components/ui'
 import { OrgSwitcher } from '../../components/OrgSwitcher'
+import { feedback } from '../../feedback'
 import { NotificationSettings } from '../../components/NotificationSettings'
 import { fmtDateLong, today } from '../../util'
 
@@ -12,6 +13,7 @@ export default function Profile() {
   const setTheme = (t: 'light' | 'dark' | 'auto') => {
     if (t === 'auto') document.documentElement.removeAttribute('data-theme')
     else document.documentElement.setAttribute('data-theme', t)
+    feedback.toast(`Thème ${t === 'auto' ? 'automatique' : t === 'dark' ? 'sombre' : 'clair'} activé.`, 'info')
   }
   return (
     <div className="stack-lg">
@@ -35,7 +37,7 @@ export default function Profile() {
           <button onClick={() => setTheme('dark')}>Sombre</button>
         </div>
       </section>
-      {!runtime.server && <button className="btn danger" onClick={() => { if (confirm('Réinitialiser toutes les données de démonstration ?')) actions.resetDemo() }}>Réinitialiser la démo</button>}
+      {!runtime.server && <button className="btn danger" onClick={async () => { if (await feedback.confirm({ tone: 'danger', title: 'Réinitialiser la démonstration ?', body: 'Toutes les modifications faites dans cette démonstration seront effacées.', confirmLabel: 'Réinitialiser' })) { actions.resetDemo(); feedback.toast('Données de démonstration réinitialisées.') } }}>Réinitialiser la démo</button>}
     </div>
   )
 }

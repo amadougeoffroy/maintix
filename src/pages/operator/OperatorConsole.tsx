@@ -45,8 +45,8 @@ function OrgCard({ org, plans, onChange }: { org: OperatorOrg; plans: PlanPreset
       <div className="row wrap">
         <button className="btn sm" aria-expanded={edit} onClick={() => setEdit(!edit)}>{edit ? 'Fermer' : 'Offre et plafonds'}</button>
         {suspended
-          ? <button className="btn sm primary" onClick={async () => { await api.opReactivate(org.id); feedback.toast(`« ${org.name} » est réactivée.`); onChange() }}>Réactiver</button>
-          : <button className="btn sm" onClick={async () => { const reason = prompt(`Suspendre « ${org.name} » ?\nLes utilisateurs ne pourront plus se connecter à cette entreprise, et les signalements QR seront désactivés.\n\nMotif (affiché à l’entreprise) :`); if (reason === null) return; await api.opSuspend(org.id, reason); feedback.toast(`« ${org.name} » est suspendue.`, 'info'); onChange() }}>Suspendre</button>}
+          ? <button className="btn sm primary" onClick={async () => { try { await api.opReactivate(org.id); feedback.toast(`« ${org.name} » est réactivée.`); onChange() } catch { feedback.toast('Réactivation impossible.', 'error') } }}>Réactiver</button>
+          : <button className="btn sm" onClick={async () => { const reason = await feedback.prompt({ tone: 'danger', title: `Suspendre « ${org.name} » ?`, body: 'Les utilisateurs ne pourront plus utiliser cette entreprise et les signalements par QR seront désactivés. Les données sont conservées.', label: 'Motif (affiché à l’entreprise)', placeholder: 'Ex. facture impayée', confirmLabel: 'Suspendre l’entreprise', multiline: false }); if (reason === null) return; try { await api.opSuspend(org.id, reason); feedback.toast(`« ${org.name} » est suspendue.`, 'info'); onChange() } catch { feedback.toast('Suspension impossible.', 'error') } }}>Suspendre</button>}
       </div>
       {edit && (
         <form className="stack" onSubmit={async (e) => {
@@ -127,7 +127,7 @@ function Signups({ plans, reload }: { plans: PlanPreset[]; reload: () => void })
             {s.message && <p className="small">« {s.message} »</p>}
             <div className="row wrap">
               <button className="btn sm primary" onClick={async () => { try { await api.opApprove(s.id, plan); feedback.dialog({ title: `Accès accordé à « ${s.company} »`, body: `L’entreprise est créée et un lien de connexion a été envoyé à ${s.email}.` }); await load(); reload() } catch { feedback.toast('Approbation impossible (déjà traitée ?).', 'error') } }}>Approuver et inviter</button>
-              <button className="btn sm" onClick={async () => { const reason = prompt(`Refuser la demande de « ${s.company} » ?\nMotif (envoyé au demandeur, facultatif) :`); if (reason === null) return; try { await api.opReject(s.id, reason); feedback.toast('Demande refusée, le demandeur a été prévenu.', 'info'); await load(); reload() } catch { feedback.toast('Refus impossible.', 'error') } }}>Refuser</button>
+              <button className="btn sm" onClick={async () => { const reason = await feedback.prompt({ tone: 'danger', title: `Refuser la demande de « ${s.company} » ?`, body: 'Le demandeur est prévenu par e-mail.', label: 'Motif (envoyé au demandeur, facultatif)', confirmLabel: 'Refuser la demande', multiline: true }); if (reason === null) return; try { await api.opReject(s.id, reason); feedback.toast('Demande refusée, le demandeur a été prévenu.', 'info'); await load(); reload() } catch { feedback.toast('Refus impossible.', 'error') } }}>Refuser</button>
             </div>
           </article>
         ))}
@@ -193,7 +193,7 @@ function Operators() {
       <section className="stack">
         <h2>Opérateurs de la plateforme</h2>
         <p className="muted small">Ils accèdent à cette console : création d’entreprises, offres, suspensions, validation des inscriptions. Ils ne voient pas les données métier des entreprises.</p>
-        {data?.operators.map((o) => <div key={o.userId} className="card row between wrap"><div><strong>{o.email}</strong><p className="small muted">depuis le {fmtDate(o.createdAt)}</p></div><button className="btn sm" onClick={async () => { if (!confirm(`Retirer ${o.email} des opérateurs ?`)) return; try { await api.opRemoveOperator(o.userId); await load() } catch (e) { feedback.toast(e instanceof ApiError && e.code === 'cannot_remove_self' ? 'Vous ne pouvez pas vous retirer vous-même.' : 'Retrait impossible.', 'error') } }}>Retirer</button></div>)}
+        {data?.operators.map((o) => <div key={o.userId} className="card row between wrap"><div><strong>{o.email}</strong><p className="small muted">depuis le {fmtDate(o.createdAt)}</p></div><button className="btn sm" onClick={async () => { if (!(await feedback.confirm({ tone: 'danger', title: `Retirer ${o.email} ?`, body: 'Cette personne n’aura plus accès à la console opérateur.', confirmLabel: 'Retirer', cancelLabel: 'Garder' }))) return; try { await api.opRemoveOperator(o.userId); await load(); feedback.toast(`${o.email} n’est plus opérateur.`, 'info') } catch (e) { feedback.toast(e instanceof ApiError && e.code === 'cannot_remove_self' ? 'Vous ne pouvez pas vous retirer vous-même.' : 'Retrait impossible.', 'error') } }}>Retirer</button></div>)}
         {data && data.fromEnv.length > 0 && <p className="small muted">Aussi opérateurs d’après la variable OPERATOR_EMAILS : {data.fromEnv.join(', ')}.</p>}
       </section>
       <form className="card stack" onSubmit={async (e) => { e.preventDefault(); try { await api.opAddOperator(email); feedback.toast(`${email} est maintenant opérateur.`); setEmail(''); await load() } catch (x) { feedback.toast(x instanceof ApiError && x.code === 'user_unknown' ? 'Cette adresse n’a pas de compte : invitez d’abord la personne dans une entreprise.' : 'Ajout impossible.', 'error') } }}>

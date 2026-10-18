@@ -2,6 +2,7 @@ import { api, type SessionInfo } from './api'
 import { actions, runtime } from './store'
 import { getSyncStatus, startSync, stopSync, syncNow } from './sync'
 import { loadOnboarding, resetOnboarding } from './onboarding'
+import { feedback } from './feedback'
 import type { State } from './types'
 
 export const toSession = (i: SessionInfo): State['session'] => ({
@@ -62,7 +63,7 @@ export async function signOut(): Promise<boolean> {
     return true
   }
   const pending = getSyncStatus().pending
-  if (pending > 0 && !confirm(`${pending} modification(s) ne sont pas encore synchronisées et seront perdues. Se déconnecter quand même ?`)) return false
+  if (pending > 0 && !(await feedback.confirm({ tone: 'danger', title: 'Modifications non synchronisées', body: `${pending} modification(s) ne sont pas encore envoyées au serveur et seront perdues si vous vous déconnectez maintenant.`, confirmLabel: 'Me déconnecter quand même', cancelLabel: 'Rester connecté' }))) return false
   await api.logout().catch(() => {})
   await stopSync(true)
   remember(null)

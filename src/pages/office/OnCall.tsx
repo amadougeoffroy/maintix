@@ -1,5 +1,6 @@
 import { actions, byId, certStatus, useData } from '../../store'
 import { Badge } from '../../components/ui'
+import { feedback } from '../../feedback'
 import { addDays, fmtDate, today, weekStart } from '../../util'
 
 export default function OnCall() {
@@ -16,7 +17,7 @@ export default function OnCall() {
         return (
           <div key={w} className="card row between wrap">
             <div><strong>Semaine du {fmtDate(w)}</strong>{w === start && <> <Badge tone="brand">En cours</Badge></>}{!slot && <> <Badge tone="bad">Sans astreinte</Badge></>}{t && !certStatus(t, w).ok && <> <Badge tone="warn">Habilitation expirée</Badge></>}</div>
-            <select aria-label={`Astreinte semaine du ${w}`} value={slot?.techId ?? ''} onChange={(e) => e.target.value && actions.setOnCall(w, e.target.value)} style={{ maxWidth: 260 }}>
+            <select aria-label={`Astreinte semaine du ${w}`} value={slot?.techId ?? ''} onChange={(e) => { if (!e.target.value) return; actions.setOnCall(w, e.target.value); feedback.toast(`Astreinte de la semaine du ${fmtDate(w)} : ${byId(s.techs, e.target.value)?.name}.`) }} style={{ maxWidth: 260 }}>
               <option value="">— Choisir —</option>
               {techs.map((x) => <option key={x.id} value={x.id}>{x.name}{certStatus(x, w).ok ? '' : ' (habilitation expirée)'}</option>)}
             </select>

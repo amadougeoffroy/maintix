@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { ShieldCheck, Search as SearchIcon, Building2, History, Receipt, CalendarDays, Download, Euro, FileText, LayoutDashboard, Menu, PhoneCall, QrCode, ScanLine, Settings, Siren, TriangleAlert, User, Users, type LucideIcon } from 'lucide-react'
+import { ChevronDown, ShieldCheck, Search as SearchIcon, Building2, History, Receipt, CalendarDays, Download, Euro, FileText, LayoutDashboard, Menu, PhoneCall, QrCode, ScanLine, Settings, Siren, TriangleAlert, User, Users, type LucideIcon } from 'lucide-react'
 import { Logo } from '../brand/Logo'
 import { byId, useData } from '../store'
 import { signOut } from '../session'
@@ -50,22 +50,63 @@ export function TechShell() {
   )
 }
 
-const OFFICE_LINKS: readonly (readonly [string, LucideIcon, string, boolean])[] = [
-  ['/office', LayoutDashboard, 'Tableau de bord', true],
-  ['/office/planning', CalendarDays, 'Planning', false],
-  ['/office/parc', Building2, 'Parc', false],
-  ['/office/search', SearchIcon, 'Recherche', false],
-  ['/office/clients', Users, 'Clients & sites', false],
-  ['/office/import', Download, 'Importer le parc', false],
-  ['/office/defects', TriangleAlert, 'Défauts', false],
-  ['/office/quotes', Euro, 'Devis', false],
-  ['/office/invoices', Receipt, 'Factures', false],
-  ['/office/contracts', FileText, 'Contrats', false],
-  ['/office/oncall', PhoneCall, 'Astreinte', false],
-  ['/office/qr', QrCode, 'QR codes', false],
-  ['/office/audit', History, 'Journal', false],
-  ['/office/settings', Settings, 'Réglages', false],
-] as const
+type NavLinkDef = readonly [string, LucideIcon, string, boolean]
+interface NavGroup { key: string; label: string; links: readonly NavLinkDef[] }
+
+/** Navigation du bureau, regroupée par domaine (les groupes se replient, l'état est mémorisé). */
+const OFFICE_GROUPS: readonly NavGroup[] = [
+  { key: 'pilotage', label: 'Pilotage', links: [
+    ['/office', LayoutDashboard, 'Tableau de bord', true],
+    ['/office/planning', CalendarDays, 'Planning', false],
+    ['/office/oncall', PhoneCall, 'Astreinte', false],
+    ['/office/search', SearchIcon, 'Recherche', false],
+  ] },
+  { key: 'parc', label: 'Parc et clients', links: [
+    ['/office/parc', Building2, 'Parc', false],
+    ['/office/clients', Users, 'Clients & sites', false],
+    ['/office/defects', TriangleAlert, 'Défauts', false],
+    ['/office/qr', QrCode, 'QR codes', false],
+    ['/office/import', Download, 'Importer le parc', false],
+  ] },
+  { key: 'commercial', label: 'Commercial', links: [
+    ['/office/contracts', FileText, 'Contrats', false],
+    ['/office/quotes', Euro, 'Devis', false],
+    ['/office/invoices', Receipt, 'Factures', false],
+  ] },
+  { key: 'admin', label: 'Administration', links: [
+    ['/office/audit', History, 'Journal', false],
+    ['/office/settings', Settings, 'Réglages', false],
+  ] },
+]
+const BOTTOM_TABS = ['/office', '/office/planning', '/office/parc', '/office/defects']
+
+const NAV_KEY = 'maintix-nav-collapsed'
+const readCollapsed = (): string[] => { try { return JSON.parse(localStorage.getItem(NAV_KEY) ?? '[]') } catch { return [] } }
+
+/** Un groupe de liens, repliable ; le groupe de la page active reste toujours ouvert. */
+function SidebarGroup({ group }: { group: NavGroup }) {
+  const { pathname } = useLocation()
+  const active = group.links.some(([to, , , end]) => (end ? pathname === to : pathname === to || pathname.startsWith(to + '/')))
+  const [collapsed, setCollapsed] = useState(() => readCollapsed().includes(group.key))
+  const open = active || !collapsed
+  const toggle = () => {
+    const next = !collapsed
+    setCollapsed(next)
+    try { const all = new Set(readCollapsed()); if (next) all.add(group.key); else all.delete(group.key); localStorage.setItem(NAV_KEY, JSON.stringify([...all])) } catch { /* mémorisation indisponible */ }
+  }
+  return (
+    <div className="nav-group">
+      <button type="button" className="nav-group-head" aria-expanded={open} aria-controls={`nav-${group.key}`} onClick={toggle}>
+        <span>{group.label}</span><ChevronDown size={16} aria-hidden="true" className={open ? 'open' : ''} />
+      </button>
+      {open && (
+        <div id={`nav-${group.key}`} className="nav-group-links">
+          {group.links.map(([to, Icon, label, end]) => <NavLink key={to} to={to} end={end} className={tab}><Icon size={20} />{label}</NavLink>)}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function OfficeShell() {
   const nav = useNavigate()
@@ -81,9 +122,7 @@ export function OfficeShell() {
       <SkipLink />
       <aside className="sidebar" aria-label="Navigation bureau">
         <div style={{ padding: '6px 12px 16px' }}><Logo height={26} />{s.session.orgName && <div className="org-side" title={s.session.orgName}>{s.session.orgName}</div>}</div>
-        {OFFICE_LINKS.map(([to, Icon, label, end]) => (
-          <NavLink key={to} to={to} end={end} className={tab}><Icon size={20} />{label}</NavLink>
-        ))}
+        <nav aria-label="Sections" className="nav-groups">{OFFICE_GROUPS.map((g) => <SidebarGroup key={g.key} group={g} />)}</nav>
         {s.session.operator && <NavLink to="/operator" className={tab} style={{ marginTop: 'auto' }}><ShieldCheck size={20} />Console opérateur</NavLink>}
         <button className="btn sm ghost" style={s.session.operator ? undefined : { marginTop: 'auto' }} onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
       </aside>
@@ -112,11 +151,14 @@ export function OfficeShell() {
 export function OfficeMore() {
   const s = useData()
   return (
-    <div className="stack">
+    <div className="stack-lg">
       <div><h1>Plus</h1>{s.session.orgName && <p className="org-line">{s.session.orgName}</p>}</div>
       {s.session.operator && <NavLink to="/operator" className="card link row"><ShieldCheck size={20} /> Console opérateur</NavLink>}
-      {OFFICE_LINKS.filter(([to]) => !['/office', '/office/planning', '/office/parc', '/office/defects'].includes(to)).map(([to, Icon, label]) => (
-        <NavLink key={to} to={to} className="card link row"><Icon size={20} /> {label}</NavLink>
+      {OFFICE_GROUPS.map((g) => ({ ...g, links: g.links.filter(([to]) => !BOTTOM_TABS.includes(to)) })).filter((g) => g.links.length > 0).map((g) => (
+        <section key={g.key} className="stack">
+          <h2 className="more-head">{g.label}</h2>
+          {g.links.map(([to, Icon, label]) => <NavLink key={to} to={to} className="card link row"><Icon size={20} /> {label}</NavLink>)}
+        </section>
       ))}
     </div>
   )

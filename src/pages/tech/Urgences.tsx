@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { actions, byId, currentOnCall, useData } from '../../store'
 import { Badge, StatusBadge } from '../../components/ui'
+import { feedback } from '../../feedback'
 import { fmtTime, today } from '../../util'
 import { Icon } from '../../components/Icon'
 
@@ -44,6 +45,7 @@ export default function Urgences() {
           ev.preventDefault()
           const j = actions.createJob({ type: 'depannage', elevatorId: el, techId: s.session.techId, date: today(), description: desc || 'Panne déclarée par le technicien', trapped, reporter: 'Technicien' })
           actions.setStatus(j.id, 'sur_place')
+          feedback.toast('Dépannage pris en charge : vous êtes sur place.')
           nav(`/tech/job/${j.id}`)
         }}
       >

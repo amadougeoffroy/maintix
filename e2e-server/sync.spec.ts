@@ -253,8 +253,9 @@ test.describe.serial('mode serveur', () => {
     await expect(page.locator('.toast-item')).toContainText('Offre de « Entreprise Cliente SA » enregistrée')
 
     // suspension avec motif
-    page.once('dialog', (d) => d.accept('Facture impayée'))
     await card.getByRole('button', { name: 'Suspendre' }).click()
+    await page.getByRole('dialog').getByLabel(/Motif/).fill('Facture impayée')
+    await page.getByRole('dialog').getByRole('button', { name: 'Suspendre l’entreprise' }).click()
     await expect(card.getByText('Suspendue')).toBeVisible()
     await dgPage.reload()
     await expect(dgPage.getByRole('heading', { name: 'Accès suspendu' })).toBeVisible()

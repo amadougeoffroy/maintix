@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { actions, byId, contractFor, healthScore, useData } from '../../store'
 import { Badge, Health } from '../../components/ui'
+import { feedback } from '../../feedback'
 import { fmtDate } from '../../util'
 import { Icon } from '../../components/Icon'
 
@@ -16,7 +17,7 @@ export default function Parc() {
     <div className="stack-lg">
       <div className="row between wrap"><h1>Parc ({s.elevators.length})</h1><span className="row wrap"><Link className="btn" to="/office/import"><Icon n="import" /> Importer</Link><button className="btn primary" onClick={() => setAdding(!adding)}>+ Appareil</button></span></div>
       {adding && (
-        <form className="card stack" onSubmit={(e) => { e.preventDefault(); actions.addElevator(f); setAdding(false) }}>
+        <form className="card stack" onSubmit={(e) => { e.preventDefault(); actions.addElevator(f); setAdding(false); feedback.toast(`Appareil « ${f.label} » ajouté.`) }}>
           <h2>Nouvel appareil</h2>
           <div className="grid2">
             <label className="field">Site<select value={f.siteId} onChange={(e) => setF({ ...f, siteId: e.target.value })}>{s.sites.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { actions, byId, runtime, useData } from '../../store'
 import { Badge } from '../../components/ui'
 import { Icon } from '../../components/Icon'
+import { feedback } from '../../feedback'
 import { contractStatus } from '../../contracts'
 import { draftFromContract, draftFromQuote, fec, salesJournalCsv, STATUS_LABEL, totals, unbilledPeriods } from '../../invoicing'
 import { issueInvoice } from '../../invoice-actions'
@@ -23,7 +24,6 @@ export default function Invoices() {
   const s = useData()
   const nav = useNavigate()
   const [filter, setFilter] = useState<Filter>('toutes')
-  const [msg, setMsg] = useState('')
   const [year, setYear] = useState(new Date().getFullYear())
   const vat = s.settings[0]?.vatRate ?? 20
   const on = today()
@@ -41,9 +41,8 @@ export default function Invoices() {
     <div className="stack-lg">
       <div className="row between wrap">
         <div><h1>Factures</h1><p className="muted">À encaisser : <strong>{fcfa(outstanding)}</strong>{overdue.length > 0 && <> · <span style={{ color: 'var(--bad)', fontWeight: 700 }}>{overdue.length} en retard</span></>}</p></div>
-        <button className="btn primary" onClick={() => { const f: Invoice = { id: uid('f'), clientId: s.clients[0]?.id ?? '', kind: 'libre', lines: [{ label: '', qty: 1, unit: 0 }], vatRate: vat, status: 'brouillon', createdAt: on }; actions.upsertInvoice(f); nav(`/office/invoices/${f.id}`) }} disabled={!s.clients.length}>+ Facture</button>
+        <button className="btn primary" onClick={() => { const f: Invoice = { id: uid('f'), clientId: s.clients[0]?.id ?? '', kind: 'libre', lines: [{ label: '', qty: 1, unit: 0 }], vatRate: vat, status: 'brouillon', createdAt: on }; actions.upsertInvoice(f); feedback.toast('Brouillon de facture créé.'); nav(`/office/invoices/${f.id}`) }} disabled={!s.clients.length}>+ Facture</button>
       </div>
-      {msg && <div className="card alert" role="alert">{msg}</div>}
 
       {(toBill.length > 0 || quotesToBill.length > 0) && (
         <section className="card stack">
@@ -51,13 +50,13 @@ export default function Invoices() {
           {toBill.map(({ c, periods }) => (
             <div key={c.id} className="row between wrap">
               <span><strong>{byId(s.clients, c.clientId)?.name}</strong> <span className="muted small">{periods.length} mois non facturé(s) · {fcfa(c.priceMonthly)}/mois</span></span>
-              <button className="btn sm" onClick={() => { periods.forEach((p) => actions.upsertInvoice(draftFromContract(c, p, 1, c.elevatorIds.length, vat, on))); setFilter('brouillon') }}><Icon n="file" /> Créer {periods.length} brouillon(s)</button>
+              <button className="btn sm" onClick={() => { periods.forEach((p) => actions.upsertInvoice(draftFromContract(c, p, 1, c.elevatorIds.length, vat, on))); setFilter('brouillon'); feedback.toast(`${periods.length} brouillon(s) de facture créé(s) pour ${byId(s.clients, c.clientId)?.name}.`) }}><Icon n="file" /> Créer {periods.length} brouillon(s)</button>
             </div>
           ))}
           {quotesToBill.map((q) => (
             <div key={q.id} className="row between wrap">
               <span><strong>Devis accepté</strong> · {byId(s.clients, q.clientId)?.name} · {byId(s.elevators, q.elevatorId)?.label}</span>
-              <button className="btn sm" onClick={() => { const f = draftFromQuote(q, vat, on); actions.upsertInvoice(f); nav(`/office/invoices/${f.id}`) }}><Icon n="euro" /> Facturer</button>
+              <button className="btn sm" onClick={() => { const f = draftFromQuote(q, vat, on); actions.upsertInvoice(f); feedback.toast('Brouillon de facture créé à partir du devis.'); nav(`/office/invoices/${f.id}`) }}><Icon n="euro" /> Facturer</button>
             </div>
           ))}
         </section>
@@ -80,8 +79,8 @@ export default function Invoices() {
               <td style={{ textAlign: 'right' }}>{fcfa(totals(i).ttc)}</td>
               <td><Badge tone={TONE[i.status]}>{STATUS_LABEL[i.status]}</Badge></td>
               <td>
-                {i.status === 'brouillon' && <button className="btn sm primary" onClick={async () => { const r = await issueInvoice(i.id); setMsg(r.ok ? '' : r.error) }}>Émettre</button>}
-                {i.status === 'emise' && <button className="btn sm" onClick={() => actions.upsertInvoice({ ...i, status: 'payee', paidAt: on })}>Marquer payée</button>}
+                {i.status === 'brouillon' && <button className="btn sm primary" onClick={async () => { const r = await issueInvoice(i.id); if (r.ok) feedback.toast('Facture émise et numérotée.'); else feedback.toast(r.error, 'error') }}>Émettre</button>}
+                {i.status === 'emise' && <button className="btn sm" onClick={() => { actions.upsertInvoice({ ...i, status: 'payee', paidAt: on }); feedback.toast(`Facture ${i.number} marquée payée.`) }}>Marquer payée</button>}
               </td>
             </tr>
           ))}

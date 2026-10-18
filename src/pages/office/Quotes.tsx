@@ -1,6 +1,7 @@
 import { useSearchParams } from 'react-router-dom'
 import { actions, byId, useData } from '../../store'
 import { Badge } from '../../components/ui'
+import { feedback } from '../../feedback'
 import { fcfa, fmtDateLong } from '../../util'
 import type { Quote } from '../../types'
 import { Icon } from '../../components/Icon'
@@ -47,8 +48,8 @@ export default function Quotes() {
               </table></div>
               <div className="row wrap">
                 {editable && <button className="btn sm" onClick={() => actions.updateQuote(q.id, { lines: [...q.lines, { label: 'Nouvelle ligne', qty: 1, unit: 0 }] })}>+ Ligne</button>}
-                {editable && <button className="btn primary sm" onClick={() => actions.updateQuote(q.id, { status: 'envoye' })}><Icon n="mail" /> Envoyer au client</button>}
-                {q.status === 'envoye' && <button className="btn sm" onClick={() => actions.updateQuote(q.id, { status: 'accepte' })}>Marquer comme accepté</button>}
+                {editable && <button className="btn primary sm" onClick={() => { actions.updateQuote(q.id, { status: 'envoye' }); feedback.toast(`Devis envoyé à ${c.name}.`) }}><Icon n="mail" /> Envoyer au client</button>}
+                {q.status === 'envoye' && <button className="btn sm" onClick={() => { actions.updateQuote(q.id, { status: 'accepte' }); feedback.toast('Devis marqué comme accepté : il peut être facturé.') }}>Marquer comme accepté</button>}
               </div>
             </div>
           </details>

@@ -1,3 +1,4 @@
+import { feedback } from '../feedback'
 import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Logo } from '../brand/Logo'
@@ -17,7 +18,6 @@ export default function Report() {
   const s = useData()
   const job = byId(s.jobs, id)
   const [valid, setValid] = useState<boolean | null>(null)
-  const [sendState, setSendState] = useState<string | null>(null)
   useEffect(() => {
     if (job) verifyJob(job).then(setValid)
   }, [job])
@@ -32,18 +32,19 @@ export default function Report() {
 
   const send = async () => {
     if (!runtime.server) return mail()
-    setSendState('Envoi…')
+    feedback.toast('Envoi du rapport…', 'info')
     try {
       const r = await api.sendReport(job.id)
-      setSendState(`Rapport PDF envoyé à ${r.to.join(', ')}.`)
+      feedback.toast(`Rapport PDF envoyé à ${r.to.join(', ')}.`)
     } catch (e) {
-      setSendState(e instanceof ApiError && e.code === 'no_recipient' ? 'Ce client n’a pas d’adresse e-mail : renseignez-la dans Clients & sites.' : 'Envoi impossible pour le moment (réseau ?). Réessayez.')
+      feedback.toast(e instanceof ApiError && e.code === 'no_recipient' ? 'Ce client n’a pas d’adresse e-mail : renseignez-la dans Clients & sites.' : 'Envoi impossible pour le moment (réseau ?). Réessayez.', 'error')
     }
   }
   const mail = () => {
     const subject = encodeURIComponent(`Rapport ${JOB_LABEL[job.type]} – ${el.label} – ${fmtDateLong(v.finishedAt!)}`)
     const body = encodeURIComponent(`Bonjour,\n\n${v.summary}\n\nRapport complet : ${location.origin}${location.pathname}#/report/${job.id}\n\nCordialement,\n${tech?.name ?? ''}`)
     actions.markSent(job.id)
+    feedback.toast('Ouverture de votre messagerie…', 'info')
     window.location.href = `mailto:${client.email}?subject=${subject}&body=${body}`
   }
 
@@ -64,7 +65,6 @@ export default function Report() {
           <button className="btn" onClick={send}><Icon n="mail" /> Envoyer au client</button>
           {runtime.server && <a className="btn" href={`/api/reports/${job.id}/pdf`} target="_blank" rel="noreferrer"><Icon n="file" /> Télécharger le PDF</a>}
           <button className="btn ghost" onClick={() => history.back()}>← Retour</button>
-          {sendState && <span className="small" role="status">{sendState}</span>}
           {v.sentAt && <span className="small muted">Envoyé le {fmtDateLong(v.sentAt)} à {fmtTime(v.sentAt)}</span>}
         </div>
 

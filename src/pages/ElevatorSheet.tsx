@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { actions, byId, contractFor, healthScore, useData } from '../store'
 import { Icon } from '../components/Icon'
 import { History as HistoryPanel } from '../components/History'
+import { feedback } from '../feedback'
 import { Health, JOB_LABEL, QR, SeverityBadge, StatusBadge, publicUrl } from '../components/ui'
 import { MEASURES, DEFECT_DELAY } from '../checklist'
 import { addDays, fmtDate, fmtDateLong, today } from '../util'
@@ -48,10 +49,11 @@ export default function ElevatorSheet({ mode }: { mode: 'tech' | 'office' }) {
         <section className="card stack">
           <div className="row wrap">
             <Link className="btn sm" to={`/office/dossier/${el.id}`}><Icon n="folder" /> Dossier de contrôle technique</Link>
-            <button className="btn sm" onClick={() => setEdit(!edit)}>{edit ? 'Fermer' : <><Icon n="pencil" /> Modifier</>}</button>
-            <button className="btn sm" onClick={() => {
-              if (!confirm(`Supprimer ${el.label} ?`)) return
-              if (actions.deleteElevator(el.id)) nav('/office/parc'); else alert('Suppression impossible : cet appareil a un historique d’interventions clôturées (traçabilité).')
+            <button className="btn sm" onClick={() => { if (edit) feedback.toast('Modifications de l’appareil enregistrées.'); setEdit(!edit) }}>{edit ? 'Fermer' : <><Icon n="pencil" /> Modifier</>}</button>
+            <button className="btn sm" onClick={async () => {
+              if (!(await feedback.confirm({ tone: 'danger', title: `Supprimer ${el.label} ?`, body: 'L’appareil, ses missions planifiées, ses défauts et ses devis seront supprimés. Cette action est définitive.', confirmLabel: 'Supprimer l’appareil', cancelLabel: 'Garder' }))) return
+              if (actions.deleteElevator(el.id)) { feedback.toast(`Appareil « ${el.label} » supprimé.`); nav('/office/parc') }
+              else feedback.dialog({ tone: 'error', title: 'Suppression impossible', body: 'Cet appareil a un historique d’interventions clôturées : il doit être conservé pour la traçabilité des rapports.' })
             }}><Icon n="trash" /> Supprimer</button>
           </div>
           {edit && (
@@ -110,6 +112,7 @@ export default function ElevatorSheet({ mode }: { mode: 'tech' | 'office' }) {
             onSubmit={(e) => {
               e.preventDefault()
               actions.addDefect({ elevatorId: el.id, origin: 'controle', title, severity: sev, due: addDays(today(), DEFECT_DELAY[sev]) })
+              feedback.toast(`Défaut ajouté : ${title}.`)
               setTitle('')
             }}
           >

@@ -89,10 +89,11 @@ test('CRUD client/site/contrat et dossier de contrôle technique', async ({ page
   await page.getByRole('button', { name: '+ Client' }).click()
   await page.getByLabel('Nom', { exact: true }).fill('Copro Test')
   await page.getByRole('button', { name: 'Enregistrer' }).click()
-  await expect(page.getByText('Copro Test')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Copro Test' })).toBeVisible()
+  await expect(page.locator('.toast-item')).toContainText('Copro Test')
   // un client avec sites ne peut pas être supprimé
   await page.getByRole('button', { name: 'Supprimer' }).first().click()
-  await expect(page.getByRole('alert')).toContainText('encore des sites')
+  await expect(page.getByRole('dialog')).toContainText('encore des sites')
   await page.goto('/#/office/dossier/e1')
   await expect(page.getByRole('heading', { name: 'Dossier de contrôle technique' })).toBeVisible()
   await expect(page.getByText('Schindler 3300')).toBeVisible()

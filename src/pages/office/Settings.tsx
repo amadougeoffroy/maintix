@@ -27,7 +27,7 @@ function Users() {
       {members.map((m) => (
         <div key={m.userId} className="card row between wrap">
           <div><strong>{m.fullName}</strong> <span className="badge">{ROLE[m.role]}</span><p className="small muted">{m.email}</p></div>
-          {s.session.isAdmin && <button className="btn sm" onClick={async () => { if (confirm(`Retirer ${m.fullName} ?`)) { try { await api.removeMember(m.userId); await reload() } catch (e) { setMsg(e instanceof ApiError && e.code === 'cannot_remove_self' ? 'Vous ne pouvez pas vous retirer vous-même.' : 'Suppression impossible.') } } }}>Retirer</button>}
+          {s.session.isAdmin && <button className="btn sm" onClick={async () => { if (!(await feedback.confirm({ tone: 'danger', title: `Retirer ${m.fullName} ?`, body: `${m.fullName} ne pourra plus se connecter à cette entreprise. Ses sessions en cours sont fermées.`, confirmLabel: 'Retirer', cancelLabel: 'Garder' }))) return; try { await api.removeMember(m.userId); await reload(); feedback.toast(`${m.fullName} a été retiré de l’équipe.`) } catch (e) { feedback.toast(e instanceof ApiError && e.code === 'cannot_remove_self' ? 'Vous ne pouvez pas vous retirer vous-même.' : 'Retrait impossible.', 'error') } }}>Retirer</button>}
         </div>
       ))}
       {msg && <p role="alert" style={{ color: 'var(--bad)' }}>{msg}</p>}
@@ -83,7 +83,7 @@ function Help() {
       <h2>Aide et prise en main</h2>
       <div className="card stack">
         <div className="row wrap">
-          <button className="btn sm" onClick={() => patchOnboarding({ welcomeSeen: false })}>Revoir la visite guidée</button>
+          <button className="btn sm" onClick={() => { patchOnboarding({ welcomeSeen: false }); feedback.toast('La visite guidée va s’afficher.', 'info') }}>Revoir la visite guidée</button>
           <button className="btn sm" onClick={() => { patchOnboarding({ gettingStartedHidden: false }); feedback.toast('La liste « Premiers pas » est de nouveau affichée sur le tableau de bord.', 'info') }} disabled={flags.gettingStartedHidden === false}>Afficher les premiers pas</button>
         </div>
         <h3>Installer l’application sur un téléphone</h3>
@@ -146,11 +146,11 @@ function Data() {
       {runtime.server && s.elevators.length === 0 && (
         <div className="card stack">
           <p className="small muted">Votre entreprise est vide. Pour essayer Maintix sans saisir vos données, vous pouvez charger des clients, appareils et missions d’exemple (à ne pas utiliser pour une entreprise réelle).</p>
-          <div><button className="btn" onClick={() => actions.loadDemo()}>Charger des données de démonstration</button></div>
+          <div><button className="btn" onClick={() => { actions.loadDemo(); feedback.toast('Données de démonstration chargées.') }}>Charger des données de démonstration</button></div>
         </div>
       )}
       <p className="muted small">{runtime.server ? 'Les données sont synchronisées avec le serveur et disponibles hors ligne sur cet appareil.' : 'Mode démonstration : données stockées sur cet appareil uniquement.'}</p>
-      {!runtime.server && <div><button className="btn danger" onClick={() => { if (confirm('Réinitialiser les données de démonstration ?')) actions.resetDemo() }}>Réinitialiser la démo</button></div>}
+      {!runtime.server && <div><button className="btn danger" onClick={async () => { if (await feedback.confirm({ tone: 'danger', title: 'Réinitialiser la démonstration ?', body: 'Toutes les modifications faites dans cette démonstration seront effacées et les données d’exemple restaurées.', confirmLabel: 'Réinitialiser' })) { actions.resetDemo(); feedback.toast('Données de démonstration réinitialisées.') } }}>Réinitialiser la démo</button></div>}
     </section>
   )
 }

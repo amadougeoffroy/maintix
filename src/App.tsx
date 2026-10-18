@@ -1,11 +1,12 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { useData } from './store'
+import { runtime, useData } from './store'
 import { ClientShell, OfficeMore, OfficeShell, OperatorShell, TechShell } from './components/Shells'
 import OperatorConsole from './pages/operator/OperatorConsole'
 import Signup from './pages/Signup'
 import Suspended from './pages/Suspended'
 import { FeedbackHost } from './components/FeedbackHost'
 import Login from './pages/Login'
+import Landing from './pages/Landing'
 import Auth from './pages/Auth'
 import Setup from './pages/Setup'
 import Report from './pages/Report'
@@ -40,13 +41,15 @@ export default function App() {
   const { session } = useData()
   const { pathname } = useLocation()
   const suspended = session.orgStatus === 'suspended' && (session.role || session.clientId)
-  const home = session.role === 'tech' ? '/tech' : session.role === 'bureau' ? '/office' : session.clientId ? '/client' : null
+  const inPlatform = !!session.operator && session.orgKind === 'platform'
+  const home = inPlatform ? '/operator' : session.role === 'tech' ? '/tech' : session.role === 'bureau' ? '/office' : session.clientId ? '/client' : null
   return (
     <>
     <FeedbackHost />
     {suspended && !pathname.startsWith('/operator') ? <Suspended /> : (
     <Routes>
-      <Route path="/" element={home ? <Navigate to={home} replace /> : <Login />} />
+      <Route path="/" element={home ? <Navigate to={home} replace /> : runtime.server ? <Landing /> : <Login />} />
+      <Route path="/login" element={home ? <Navigate to={home} replace /> : <Login />} />
       <Route path="/auth" element={<Auth />} />
       <Route path="/setup" element={<Setup />} />
       <Route path="/signup" element={<Signup />} />
@@ -66,7 +69,7 @@ export default function App() {
         <Route path="elevator/:id" element={<ElevatorSheet mode="tech" />} />
       </Route>
 
-      <Route path="/office" element={session.role === 'bureau' ? <OfficeShell /> : <Navigate to="/" replace />}>
+      <Route path="/office" element={session.role === 'bureau' && !inPlatform ? <OfficeShell /> : <Navigate to="/" replace />}>
         <Route index element={<Dashboard />} />
         <Route path="planning" element={<Planning />} />
         <Route path="parc" element={<Parc />} />

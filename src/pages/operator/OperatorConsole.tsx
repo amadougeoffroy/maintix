@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, ApiError, type BillingView, type OperatorOrg, type PlanPreset, type SignupRequest } from '../../api'
+import { useNavigate } from 'react-router-dom'
+import { api, ApiError, type BillingView, type OperatorOrg, type PlanInput, type PlanPreset, type SignupRequest } from '../../api'
 import { Badge } from '../../components/ui'
 import { feedback } from '../../feedback'
+import { enterOrg } from '../../session'
 import { fcfa, fmtDate, fmtTime } from '../../util'
 
-type Tab = 'orgs' | 'signups' | 'billing' | 'operators'
+type Tab = 'orgs' | 'signups' | 'plans' | 'billing' | 'operators'
 const when = (iso: string | null) => (iso ? `${fmtDate(iso)} ${fmtTime(iso)}` : '—')
 
 function Meter({ label, value, max }: { label: string; value: number; max: number | null }) {
@@ -18,6 +20,7 @@ function Meter({ label, value, max }: { label: string; value: number; max: numbe
 }
 
 function OrgCard({ org, plans, onChange }: { org: OperatorOrg; plans: PlanPreset[]; onChange: () => void }) {
+  const nav = useNavigate()
   const [edit, setEdit] = useState(false)
   const [f, setF] = useState({ plan: org.offer.plan, trialEndsOn: org.offer.trialEndsOn ?? '', maxTechs: org.offer.maxTechs === null ? '' : String(org.offer.maxTechs), maxElevators: org.offer.maxElevators === null ? '' : String(org.offer.maxElevators), priceMonthly: String(org.offer.priceMonthly), extraTechPrice: String(org.offer.extraTechPrice), extraElevatorPrice: String(org.offer.extraElevatorPrice), notes: org.offer.notes })
   const preset = (code: string) => {
@@ -43,6 +46,7 @@ function OrgCard({ org, plans, onChange }: { org: OperatorOrg; plans: PlanPreset
       {org.offer.trialEndsOn && org.offer.plan === 'essai' && <p className="small muted">Essai jusqu’au {fmtDate(org.offer.trialEndsOn)}</p>}
       {org.offer.notes && <p className="small muted">Note : {org.offer.notes}</p>}
       <div className="row wrap">
+        <button className="btn sm primary" onClick={async () => { const r = await enterOrg(org.id); if (r.ok) { feedback.toast(`Vous êtes dans « ${org.name} ». Le bandeau orange permet de revenir à la console.`, 'info'); nav('/office') } else feedback.toast(r.error, 'error') }}>Ouvrir l’entreprise</button>
         <button className="btn sm" aria-expanded={edit} onClick={() => setEdit(!edit)}>{edit ? 'Fermer' : 'Offre et plafonds'}</button>
         {suspended
           ? <button className="btn sm primary" onClick={async () => { try { await api.opReactivate(org.id); feedback.toast(`« ${org.name} » est réactivée.`); onChange() } catch { feedback.toast('Réactivation impossible.', 'error') } }}>Réactiver</button>
@@ -183,6 +187,88 @@ function Billing() {
   )
 }
 
+const numOrNull = (v: string) => (v.trim() === '' ? null : Math.max(0, Math.round(Number(v))))
+const blankPlan = { code: '', name: '', maxTechs: '', maxElevators: '', priceMonthly: '0', extraTechPrice: '0', extraElevatorPrice: '0', trialDays: '', archived: false }
+type PlanForm = typeof blankPlan
+const formOf = (p: PlanPreset): PlanForm => ({ code: p.code, name: p.name, maxTechs: p.maxTechs === null ? '' : String(p.maxTechs), maxElevators: p.maxElevators === null ? '' : String(p.maxElevators), priceMonthly: String(p.priceMonthly), extraTechPrice: String(p.extraTechPrice), extraElevatorPrice: String(p.extraElevatorPrice), trialDays: p.trialDays ? String(p.trialDays) : '', archived: !!p.archived })
+const inputOf = (f: PlanForm): PlanInput => ({ name: f.name.trim(), maxTechs: numOrNull(f.maxTechs), maxElevators: numOrNull(f.maxElevators), priceMonthly: numOrNull(f.priceMonthly) ?? 0, extraTechPrice: numOrNull(f.extraTechPrice) ?? 0, extraElevatorPrice: numOrNull(f.extraElevatorPrice) ?? 0, trialDays: numOrNull(f.trialDays) || null, archived: f.archived })
+
+function PlanFields({ f, setF, isNew }: { f: PlanForm; setF: (f: PlanForm) => void; isNew: boolean }) {
+  const set = (k: keyof PlanForm) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value })
+  return (
+    <div className="grid2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
+      {isNew && <label className="field">Code (identifiant)<input required pattern="[a-z0-9-]{2,30}" placeholder="premium" value={f.code} onChange={set('code')} /></label>}
+      <label className="field">Nom de l’offre<input required minLength={2} value={f.name} onChange={set('name')} /></label>
+      <label className="field">Prix mensuel (FCFA)<input type="number" min="0" required value={f.priceMonthly} onChange={set('priceMonthly')} /></label>
+      <label className="field">Techniciens inclus<input type="number" min="0" placeholder="illimité" value={f.maxTechs} onChange={set('maxTechs')} /></label>
+      <label className="field">Appareils inclus<input type="number" min="0" placeholder="illimité" value={f.maxElevators} onChange={set('maxElevators')} /></label>
+      <label className="field">Technicien en plus (FCFA)<input type="number" min="0" value={f.extraTechPrice} onChange={set('extraTechPrice')} /></label>
+      <label className="field">Appareil en plus (FCFA)<input type="number" min="0" value={f.extraElevatorPrice} onChange={set('extraElevatorPrice')} /></label>
+      <label className="field">Essai (jours)<input type="number" min="1" placeholder="aucun" value={f.trialDays} onChange={set('trialDays')} /></label>
+    </div>
+  )
+}
+
+function PlanCardRow({ plan, onChange }: { plan: PlanPreset; onChange: (plans: PlanPreset[]) => void }) {
+  const [edit, setEdit] = useState(false)
+  const [f, setF] = useState(formOf(plan))
+  const save = async (archived = f.archived) => {
+    try { const r = await api.opUpdatePlan(plan.code, inputOf({ ...f, archived })); onChange(r.plans); setEdit(false); feedback.toast(archived !== !!plan.archived ? (archived ? `Offre « ${f.name} » archivée.` : `Offre « ${f.name} » réactivée.`) : `Offre « ${f.name} » enregistrée.`) }
+    catch { feedback.toast('Enregistrement impossible : vérifiez les champs.', 'error') }
+  }
+  const remove = async () => {
+    if (!(await feedback.confirm({ tone: 'danger', title: `Supprimer l’offre « ${plan.name} » ?`, body: 'Une offre utilisée par des entreprises ne peut pas être supprimée : archivez-la plutôt.', confirmLabel: 'Supprimer l’offre', cancelLabel: 'Garder' }))) return
+    try { const r = await api.opDeletePlan(plan.code); onChange(r.plans); feedback.toast(`Offre « ${plan.name} » supprimée.`, 'info') }
+    catch (e) { feedback.toast(e instanceof ApiError && e.code === 'in_use' ? 'Cette offre est utilisée par des entreprises : archivez-la au lieu de la supprimer.' : 'Suppression impossible.', 'error') }
+  }
+  return (
+    <article className="card stack">
+      <div className="row between wrap">
+        <div><h3>{plan.name} <span className="small muted">({plan.code})</span></h3>
+          <p className="small muted">{plan.priceMonthly > 0 ? `${fcfa(plan.priceMonthly)} / mois` : 'Gratuit ou sur devis'} · {plan.maxTechs === null ? 'techniciens illimités' : `${plan.maxTechs} techniciens`} · {plan.maxElevators === null ? 'appareils illimités' : `${plan.maxElevators} appareils`}{plan.trialDays ? ` · essai ${plan.trialDays} j` : ''}</p></div>
+        {plan.archived && <Badge tone="warn">Archivée</Badge>}
+      </div>
+      <div className="row wrap">
+        <button className="btn sm" aria-expanded={edit} onClick={() => { setF(formOf(plan)); setEdit(!edit) }}>{edit ? 'Fermer' : 'Modifier'}</button>
+        <button className="btn sm" onClick={() => { setF(formOf(plan)); void save(!plan.archived) }}>{plan.archived ? 'Réactiver' : 'Archiver'}</button>
+        <button className="btn sm" onClick={remove}>Supprimer</button>
+      </div>
+      {edit && (
+        <form className="stack" onSubmit={(e) => { e.preventDefault(); void save() }}>
+          <PlanFields f={f} setF={setF} isNew={false} />
+          <p className="small muted">Les entreprises déjà abonnées gardent leurs conditions : modifiez-les depuis leur fiche pour les changer.</p>
+          <div><button className="btn primary">Enregistrer l’offre</button></div>
+        </form>
+      )}
+    </article>
+  )
+}
+
+function Plans({ plans, reload }: { plans: PlanPreset[]; reload: () => void }) {
+  const [list, setList] = useState(plans)
+  const [f, setF] = useState(blankPlan)
+  useEffect(() => setList(plans), [plans])
+  const update = (p: PlanPreset[]) => { setList(p); reload() }
+  return (
+    <div className="stack-lg">
+      <section className="stack">
+        <h2>Offres commerciales</h2>
+        <p className="muted small">Le catalogue proposé à la création d’une entreprise et à l’approbation d’une demande. Montants en FCFA par mois.</p>
+        {list.map((p) => <PlanCardRow key={p.code} plan={p} onChange={update} />)}
+      </section>
+      <form className="card stack" onSubmit={async (e) => {
+        e.preventDefault()
+        try { const r = await api.opCreatePlan({ code: f.code.trim().toLowerCase(), ...inputOf(f) }); update(r.plans); setF(blankPlan); feedback.toast(`Offre « ${f.name} » créée.`) }
+        catch (x) { feedback.toast(x instanceof ApiError && x.code === 'code_taken' ? 'Ce code d’offre existe déjà.' : 'Création impossible : vérifiez les champs.', 'error') }
+      }}>
+        <h3>Nouvelle offre</h3>
+        <PlanFields f={f} setF={setF} isNew />
+        <div><button className="btn primary">Créer l’offre</button></div>
+      </form>
+    </div>
+  )
+}
+
 function Operators() {
   const [data, setData] = useState<Awaited<ReturnType<typeof api.opOperators>> | null>(null)
   const [email, setEmail] = useState('')
@@ -192,9 +278,15 @@ function Operators() {
     <div className="stack-lg">
       <section className="stack">
         <h2>Opérateurs de la plateforme</h2>
-        <p className="muted small">Ils accèdent à cette console : création d’entreprises, offres, suspensions, validation des inscriptions. Ils ne voient pas les données métier des entreprises.</p>
-        {data?.operators.map((o) => <div key={o.userId} className="card row between wrap"><div><strong>{o.email}</strong><p className="small muted">depuis le {fmtDate(o.createdAt)}</p></div><button className="btn sm" onClick={async () => { if (!(await feedback.confirm({ tone: 'danger', title: `Retirer ${o.email} ?`, body: 'Cette personne n’aura plus accès à la console opérateur.', confirmLabel: 'Retirer', cancelLabel: 'Garder' }))) return; try { await api.opRemoveOperator(o.userId); await load(); feedback.toast(`${o.email} n’est plus opérateur.`, 'info') } catch (e) { feedback.toast(e instanceof ApiError && e.code === 'cannot_remove_self' ? 'Vous ne pouvez pas vous retirer vous-même.' : 'Retrait impossible.', 'error') } }}>Retirer</button></div>)}
-        {data && data.fromEnv.length > 0 && <p className="small muted">Aussi opérateurs d’après la variable OPERATOR_EMAILS : {data.fromEnv.join(', ')}.</p>}
+        <p className="muted small">Ils accèdent à cette console : création d’entreprises, offres, suspensions, validation des inscriptions. Ils peuvent ouvrir une entreprise pour assister ses utilisateurs (chaque entrée est tracée dans le journal).</p>
+        {data?.operators.map((o) => (
+          <div key={o.userId} className="card row between wrap">
+            <div><strong>{o.email}</strong> {o.fromEnv && <Badge tone="brand">Défini par OPERATOR_EMAILS</Badge>}<p className="small muted">depuis le {fmtDate(o.createdAt)}</p></div>
+            {o.fromEnv
+              ? <span className="small muted">Non retirable ici : modifiez la variable d’environnement.</span>
+              : <button className="btn sm" onClick={async () => { if (!(await feedback.confirm({ tone: 'danger', title: `Retirer ${o.email} ?`, body: 'Cette personne n’aura plus accès à la console opérateur.', confirmLabel: 'Retirer', cancelLabel: 'Garder' }))) return; try { await api.opRemoveOperator(o.userId); await load(); feedback.toast(`${o.email} n’est plus opérateur.`, 'info') } catch (e) { feedback.toast(e instanceof ApiError && e.code === 'cannot_remove_self' ? 'Vous ne pouvez pas vous retirer vous-même.' : e instanceof ApiError && e.code === 'env_operator' ? 'Cet opérateur est défini par la configuration du serveur.' : 'Retrait impossible.', 'error') } }}>Retirer</button>}
+          </div>
+        ))}
       </section>
       <form className="card stack" onSubmit={async (e) => { e.preventDefault(); try { await api.opAddOperator(email); feedback.toast(`${email} est maintenant opérateur.`); setEmail(''); await load() } catch (x) { feedback.toast(x instanceof ApiError && x.code === 'user_unknown' ? 'Cette adresse n’a pas de compte : invitez d’abord la personne dans une entreprise.' : 'Ajout impossible.', 'error') } }}>
         <h3>Ajouter un opérateur</h3>
@@ -211,7 +303,7 @@ export default function OperatorConsole() {
   const [error, setError] = useState(false)
   const reload = useCallback(() => api.opOverview().then((d) => { setData(d); setError(false) }).catch(() => setError(true)), [])
   useEffect(() => { void reload() }, [reload])
-  const TABS: [Tab, string][] = [['orgs', 'Entreprises'], ['signups', `Demandes${data?.pendingSignups ? ` (${data.pendingSignups})` : ''}`], ['billing', 'Facturation'], ['operators', 'Opérateurs']]
+  const TABS: [Tab, string][] = [['orgs', 'Entreprises'], ['signups', `Demandes${data?.pendingSignups ? ` (${data.pendingSignups})` : ''}`], ['plans', 'Offres'], ['billing', 'Facturation'], ['operators', 'Opérateurs']]
   const totals = data ? { orgs: data.orgs.length, active: data.orgs.filter((o) => o.status === 'active').length, techs: data.orgs.reduce((t, o) => t + o.usage.techs, 0), elevators: data.orgs.reduce((t, o) => t + o.usage.elevators, 0) } : null
   return (
     <div className="stack-lg">
@@ -228,8 +320,9 @@ export default function OperatorConsole() {
       <div className="subtabs" role="tablist" aria-label="Sections de la console">
         {TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={`subtab ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}>{l}</button>)}
       </div>
-      {data && tab === 'orgs' && <Orgs plans={data.plans} orgs={data.orgs} reload={reload} />}
-      {data && tab === 'signups' && <Signups plans={data.plans} reload={reload} />}
+      {data && tab === 'orgs' && <Orgs plans={data.plans.filter((p) => !p.archived)} orgs={data.orgs} reload={reload} />}
+      {data && tab === 'signups' && <Signups plans={data.plans.filter((p) => !p.archived)} reload={reload} />}
+      {data && tab === 'plans' && <Plans plans={data.plans} reload={reload} />}
       {tab === 'billing' && <Billing />}
       {tab === 'operators' && <Operators />}
     </div>

@@ -3,7 +3,8 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { ChevronDown, ShieldCheck, Search as SearchIcon, Building2, History, Receipt, CalendarDays, Download, Euro, FileText, LayoutDashboard, Menu, PhoneCall, QrCode, ScanLine, Settings, Siren, TriangleAlert, User, Users, type LucideIcon } from 'lucide-react'
 import { Logo } from '../brand/Logo'
 import { byId, useData } from '../store'
-import { signOut } from '../session'
+import { feedback } from '../feedback'
+import { leaveToConsole, signOut } from '../session'
 import { SyncBadge } from './SyncBadge'
 import { OfflineBanner } from './ui'
 import { WelcomeTour } from './WelcomeTour'
@@ -22,6 +23,22 @@ function Main({ className }: { className: string }) {
     window.scrollTo({ top: 0 })
   }, [pathname])
   return <main id="main" ref={ref} tabIndex={-1} className={className}><Outlet /></main>
+}
+/** Bandeau du mode opérateur : on agit dans une entreprise cliente ; un clic ramène à la console. */
+function useLeaveConsole() {
+  const nav = useNavigate()
+  return async () => { const r = await leaveToConsole(); if (r.ok) nav('/operator'); else feedback.toast(r.error, 'error') }
+}
+function OperatorBanner() {
+  const s = useData()
+  const leave = useLeaveConsole()
+  if (!s.session.impersonating) return null
+  return (
+    <div className="op-banner" role="region" aria-label="Mode opérateur">
+      <span><ShieldCheck size={18} aria-hidden="true" /> Mode opérateur : vous êtes dans <strong>{s.session.orgName}</strong></span>
+      <button type="button" className="btn sm" onClick={leave}>← Retour à la console</button>
+    </div>
+  )
 }
 const SkipLink = () => <button type="button" className="skip" onClick={() => document.getElementById('main')?.focus()}>Aller au contenu</button>
 
@@ -111,6 +128,7 @@ function SidebarGroup({ group }: { group: NavGroup }) {
 export function OfficeShell() {
   const nav = useNavigate()
   const s = useData()
+  const leave = useLeaveConsole()
   // Ctrl/⌘ + K : recherche globale
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); nav('/office/search') } }
@@ -123,10 +141,11 @@ export function OfficeShell() {
       <aside className="sidebar" aria-label="Navigation bureau">
         <div style={{ padding: '6px 12px 16px' }}><Logo height={26} />{s.session.orgName && <div className="org-side" title={s.session.orgName}>{s.session.orgName}</div>}</div>
         <nav aria-label="Sections" className="nav-groups">{OFFICE_GROUPS.map((g) => <SidebarGroup key={g.key} group={g} />)}</nav>
-        {s.session.operator && <NavLink to="/operator" className={tab} style={{ marginTop: 'auto' }}><ShieldCheck size={20} />Console opérateur</NavLink>}
-        <button className="btn sm ghost" style={s.session.operator ? undefined : { marginTop: 'auto' }} onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
+        {s.session.impersonating && <button className="btn sm" style={{ marginTop: 'auto' }} onClick={leave}><ShieldCheck size={16} aria-hidden="true" /> Retour à la console</button>}
+        <button className="btn sm ghost" style={s.session.impersonating ? undefined : { marginTop: 'auto' }} onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
       </aside>
       <div className="app">
+        <OperatorBanner />
         <header className="topbar">
           <p className="brandline"><Logo variant="dark" height={22} /><span className="who"><span className="who-label">Bureau</span>{s.session.orgName ? <span className="org-chip">{s.session.orgName}</span> : null}</span></p>
           <NavLink to="/office/search" className="btn sm ghost" aria-label="Rechercher"><SearchIcon size={18} /></NavLink>
@@ -134,7 +153,7 @@ export function OfficeShell() {
           <button className="btn sm ghost" onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
         </header>
         <OfflineBanner />
-        <WelcomeTour kind="admin" />
+        {!s.session.impersonating && <WelcomeTour kind="admin" />}
         <Main className="content wide" />
         <nav className="tabbar" aria-label="Navigation bureau mobile">
           <NavLink to="/office" end className={tab}><LayoutDashboard size={24} /><span>Accueil</span></NavLink>
@@ -150,10 +169,11 @@ export function OfficeShell() {
 
 export function OfficeMore() {
   const s = useData()
+  const leave = useLeaveConsole()
   return (
     <div className="stack-lg">
       <div><h1>Plus</h1>{s.session.orgName && <p className="org-line">{s.session.orgName}</p>}</div>
-      {s.session.operator && <NavLink to="/operator" className="card link row"><ShieldCheck size={20} /> Console opérateur</NavLink>}
+      {s.session.impersonating && <button type="button" className="card link row" onClick={leave}><ShieldCheck size={20} /> Retour à la console opérateur</button>}
       {OFFICE_GROUPS.map((g) => ({ ...g, links: g.links.filter(([to]) => !BOTTOM_TABS.includes(to)) })).filter((g) => g.links.length > 0).map((g) => (
         <section key={g.key} className="stack">
           <h2 className="more-head">{g.label}</h2>
@@ -172,7 +192,6 @@ export function OperatorShell() {
       <SkipLink />
       <header className="topbar">
         <p className="brandline"><Logo variant="dark" height={22} /><span className="who">Console opérateur</span></p>
-        <NavLink to="/" className="btn sm ghost">Retour à l’application</NavLink>
         <button className="btn sm ghost" onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
       </header>
       <OfflineBanner />

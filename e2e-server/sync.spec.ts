@@ -26,6 +26,7 @@ async function freshLogin(browser: Browser, email: string) {
   const page = await ctx.newPage()
   const before = mailCount(email)
   await page.goto('/')
+  await page.getByRole('link', { name: 'Recevoir mon lien de connexion' }).first().click() // depuis la page de présentation
   await page.getByLabel('Adresse e-mail').fill(email)
   await page.getByRole('button', { name: /Recevoir mon lien/ }).click()
   await expect(page.getByRole('status')).toContainText('lien de connexion')
@@ -44,12 +45,32 @@ async function loginWithLink(browser: Browser, email: string) {
 }
 
 test.describe.serial('mode serveur', () => {
+  test('page de présentation à la racine, avec accès à la connexion et à la demande d’accès', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByRole('heading', { level: 1, name: 'Chaque visite, tracée.' })).toBeVisible()
+    await page.waitForTimeout(300)
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme })
+      const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
+      expect(axe.violations.map((v) => `${scheme} ${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`)).toEqual([])
+    }
+    await page.emulateMedia({ colorScheme: 'light' })
+    if (process.env.SHOTS) await page.screenshot({ path: 'docs/screenshots/47-page-presentation.png', fullPage: true })
+    await page.getByRole('link', { name: 'Recevoir mon lien de connexion' }).first().click()
+    await expect(page.getByRole('heading', { name: 'Recevoir mon lien de connexion' })).toBeVisible()
+    await expect(page.getByLabel('Adresse e-mail')).toBeVisible()
+    await page.getByRole('link', { name: /Retour à l’accueil/ }).click()
+    await page.getByRole('link', { name: 'Demander un accès' }).first().click()
+    await expect(page.getByRole('heading', { name: 'Demander un accès' })).toBeVisible()
+    await expect(page.getByLabel('Nom de l’entreprise')).toBeVisible()
+  })
+
   test('installation, connexion par lien, démo, invitation, synchro entre appareils', async ({ browser, page }) => {
     // 1) installation de l'instance
     await page.goto('/#/setup')
-    await page.getByLabel('Nom de l’entreprise').fill('Ascenseurs Dupont')
-    await page.getByLabel('Votre nom').fill('Ada Admin')
-    await page.getByLabel('Votre e-mail').fill('ada@dupont.test')
+    await page.getByLabel('Nom de l’entreprise').fill('Maintix')
+    await page.getByLabel('Votre nom').fill('Opérateur Dupont')
+    await page.getByLabel('Votre e-mail').fill('ops@dupont.test')
     await page.getByLabel(/Jeton d’installation/).fill('mauvais')
     await page.getByRole('button', { name: 'Créer l’organisation' }).click()
     await expect(page.getByRole('alert')).toContainText('incorrect')
@@ -57,7 +78,17 @@ test.describe.serial('mode serveur', () => {
     await page.getByRole('button', { name: 'Créer l’organisation' }).click()
     await expect(page.getByText('Organisation créée')).toBeVisible()
 
-    // 2) connexion par lien magique (usage unique)
+    // 1 bis) l'opérateur arrive sur la console (page par défaut) et crée l'entreprise cliente et son administrateur
+    const op = await loginWithLink(browser, 'ops@dupont.test')
+    await expect(op.page.getByRole('heading', { name: 'Console opérateur' })).toBeVisible()
+    await op.page.getByLabel('Nom de l’entreprise').fill('Ascenseurs Dupont')
+    await op.page.getByLabel('Nom de l’administrateur').fill('Ada Admin')
+    await op.page.getByLabel('E-mail de l’administrateur').fill('ada@dupont.test')
+    await op.page.getByRole('button', { name: 'Créer et envoyer l’invitation' }).click()
+    await op.page.getByRole('dialog').getByRole('button', { name: 'Compris' }).click()
+    await op.ctx.close()
+
+    // 2) connexion de l'administrateur par lien magique (usage unique)
     const link = await waitLink('ada@dupont.test')
     await page.goto(link)
     await expect(page.getByRole('dialog').getByRole('heading', { name: /Bienvenue Ada/ })).toBeVisible() // première connexion : visite guidée
@@ -199,19 +230,31 @@ test.describe.serial('mode serveur', () => {
   })
 
   test('console opérateur : création d’une entreprise et de son administrateur, offre, suspension, inscription libre-service', async ({ browser }) => {
-    const ada = await freshLogin(browser, 'ada@dupont.test')
+    const ada = await freshLogin(browser, 'ops@dupont.test')
     const page = ada.page
-    await expect(page.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible()
-    await page.goto('/#/office/more') // sur téléphone, le lien est dans « Plus » (la barre latérale n'existe que sur grand écran)
-    await page.getByRole('link', { name: 'Console opérateur' }).click()
-    await expect(page.getByRole('heading', { name: 'Console opérateur' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Console opérateur' })).toBeVisible() // console = page par défaut d'un opérateur
     await expect(page.getByRole('heading', { name: 'Ascenseurs Dupont' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Maintix', exact: true })).toHaveCount(0) // l'entreprise plateforme n'est pas listée
     await expect(page.getByText('Techniciens').first()).toBeVisible()
 
-    // la création d'entreprise n'existe plus côté entreprise : seul le sélecteur reste
-    await page.goto('/#/office/settings/entreprise')
-    await expect(page.getByLabel('Nom de la nouvelle entreprise')).toHaveCount(0)
-    await page.goto('/#/operator')
+    // ouvrir une entreprise cliente, puis revenir à la console grâce au bandeau
+    const dupont = page.locator('article', { hasText: 'Ascenseurs Dupont' })
+    await dupont.getByRole('button', { name: 'Ouvrir l’entreprise' }).click()
+    await expect(page.getByRole('region', { name: 'Mode opérateur' })).toContainText('Ascenseurs Dupont')
+    await expect(page.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible()
+    await expect(page.getByRole('dialog')).toHaveCount(0) // pas de visite guidée en mode opérateur
+    await page.getByRole('region', { name: 'Mode opérateur' }).getByRole('button', { name: /Retour à la console/ }).click()
+    await expect(page.getByRole('heading', { name: 'Console opérateur' })).toBeVisible()
+
+    // catalogue d'offres géré depuis la console
+    await page.getByRole('tab', { name: 'Offres' }).click()
+    await page.getByLabel('Code (identifiant)').fill('premium')
+    await page.getByLabel('Nom de l’offre').last().fill('Premium')
+    await page.getByLabel('Prix mensuel (FCFA)').last().fill('150000')
+    await page.getByRole('button', { name: 'Créer l’offre' }).click()
+    await expect(page.locator('.toast-item', { hasText: 'Offre « Premium » créée' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Premium/ })).toBeVisible()
+    await page.getByRole('tab', { name: 'Entreprises' }).click()
 
     // création d'une entreprise + son premier administrateur en une action
     await page.getByLabel('Nom de l’entreprise').fill('Entreprise Cliente SA')
@@ -250,7 +293,7 @@ test.describe.serial('mode serveur', () => {
     await card.getByRole('button', { name: 'Offre et plafonds' }).click()
     await card.getByLabel('Plafond techniciens').fill('2')
     await card.getByRole('button', { name: 'Enregistrer l’offre' }).click()
-    await expect(page.locator('.toast-item')).toContainText('Offre de « Entreprise Cliente SA » enregistrée')
+    await expect(page.locator('.toast-item', { hasText: 'Offre de « Entreprise Cliente SA » enregistrée' })).toBeVisible()
 
     // suspension avec motif
     await card.getByRole('button', { name: 'Suspendre' }).click()
@@ -296,23 +339,26 @@ test.describe.serial('mode serveur', () => {
 
   test('didacticiel : visite guidée au premier accès, nom de l’entreprise sur le tableau de bord, premiers pas qui se cochent', async ({ browser }) => {
     const admin = await freshLogin(browser, 'ada@dupont.test')
-    const page = admin.page
-    await expect(page.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible()
-    await expect(page.locator('.org-line')).toHaveText('Ascenseurs Dupont') // nom visible sur le tableau de bord
-    await expect(page.locator('.org-side')).toHaveText('Ascenseurs Dupont') // et dans la barre latérale
+    const apage = admin.page
+    await expect(apage.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible()
+    await expect(apage.locator('.org-line')).toHaveText('Ascenseurs Dupont') // nom visible sur le tableau de bord
+    await expect(apage.locator('.org-side')).toHaveText('Ascenseurs Dupont') // et dans la barre latérale
 
-    // l'opérateur crée l'entreprise (avec lui comme administrateur) puis bascule dessus
-    await page.goto('/#/operator')
-    await page.getByLabel('Nom de l’entreprise').fill('Entreprise Tuto')
-    await page.getByLabel('Nom de l’administrateur').fill('Ada Admin')
-    await page.getByLabel('E-mail de l’administrateur').fill('ada@dupont.test')
-    await page.getByRole('button', { name: 'Créer et envoyer l’invitation' }).click()
-    await page.getByRole('dialog').getByRole('button', { name: 'Compris' }).click()
-    await page.goto('/#/office/settings/entreprise')
-    await page.getByLabel('Changer d’entreprise').selectOption({ label: 'Entreprise Tuto' })
-    await page.getByRole('dialog').getByRole('button', { name: 'Compris' }).click()
+    // l'opérateur crée une autre entreprise ; son administrateur (nouveau compte) se connecte
+    const op = await freshLogin(browser, 'ops@dupont.test')
+    await op.page.getByLabel('Nom de l’entreprise').fill('Entreprise Tuto')
+    await op.page.getByLabel('Nom de l’administrateur').fill('Ada Tuto')
+    await op.page.getByLabel('E-mail de l’administrateur').fill('tuto@dupont.test')
+    await op.page.getByRole('button', { name: 'Créer et envoyer l’invitation' }).click()
+    await op.page.getByRole('dialog').getByRole('button', { name: 'Compris' }).click()
+    await op.ctx.close()
+    await admin.ctx.close()
+    const tutoCtx = await browser.newContext({ viewport: { width: 412, height: 839 } })
+    const page2 = await tutoCtx.newPage()
+    await page2.goto(await waitLink('tuto@dupont.test'))
 
     // première visite de cette entreprise : visite guidée en 5 écrans
+    const page = page2
     const tour = page.getByRole('dialog')
     await expect(tour.getByRole('heading', { name: 'Bienvenue Ada' })).toBeVisible()
     await expect(tour).toContainText('Votre espace « Entreprise Tuto » est prêt')
@@ -343,7 +389,7 @@ test.describe.serial('mode serveur', () => {
     await expect(page.locator('.gs .badge')).toHaveText('1/8')
 
     // l'avancement est enregistré sur le serveur : un nouvel appareil ne ré-affiche pas la visite
-    const again = await freshLogin(browser, 'ada@dupont.test')
+    const again = await freshLogin(browser, 'tuto@dupont.test')
     await again.page.goto('/#/office/settings/entreprise')
     await expect(again.page.getByRole('dialog')).toHaveCount(0)
     await again.ctx.close()
@@ -355,6 +401,6 @@ test.describe.serial('mode serveur', () => {
     await page.getByRole('button', { name: 'Afficher les premiers pas' }).click()
     await page.goto('/#/office')
     await expect(page.getByRole('heading', { name: 'Premiers pas' })).toBeVisible()
-    await admin.ctx.close()
+    await tutoCtx.close()
   })
 })

@@ -1,3 +1,4 @@
+import type { Db } from './db'
 /** Offres de départ (modifiables par entreprise dans la console). Montants en FCFA par mois. */
 export interface PlanPreset {
   code: string
@@ -17,7 +18,19 @@ export const PLANS: PlanPreset[] = [
   { code: 'sur-mesure', name: 'Sur mesure', maxTechs: null, maxElevators: null, priceMonthly: 0, extraTechPrice: 0, extraElevatorPrice: 0 },
   { code: 'interne', name: 'Interne (non facturé)', maxTechs: null, maxElevators: null, priceMonthly: 0, extraTechPrice: 0, extraElevatorPrice: 0 },
 ]
-export const planByCode = (code: string) => PLANS.find((p) => p.code === code)
+
+interface PlanRow { code: string; name: string; max_techs: number | null; max_elevators: number | null; price_monthly: number; extra_tech_price: number; extra_elevator_price: number; trial_days: number | null; archived: boolean }
+export type PlanEntry = PlanPreset & { archived: boolean }
+const shapePlan = (r: PlanRow): PlanEntry => ({ code: r.code, name: r.name, maxTechs: r.max_techs, maxElevators: r.max_elevators, priceMonthly: r.price_monthly, extraTechPrice: r.extra_tech_price, extraElevatorPrice: r.extra_elevator_price, trialDays: r.trial_days ?? undefined, archived: r.archived })
+
+/** Catalogue d'offres (table `plans`, géré par les opérateurs). */
+export async function loadPlans(db: Pick<Db, 'query'>): Promise<PlanEntry[]> {
+  return (await db.query<PlanRow>('select * from plans order by sort, created_at')).rows.map(shapePlan)
+}
+export async function getPlan(db: Pick<Db, 'query'>, code: string): Promise<PlanEntry | undefined> {
+  const r = (await db.query<PlanRow>('select * from plans where code = $1', [code])).rows[0]
+  return r ? shapePlan(r) : undefined
+}
 
 export interface OrgOffer {
   plan: string

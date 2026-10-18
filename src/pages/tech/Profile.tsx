@@ -1,6 +1,5 @@
 import { byId, certStatus, actions, runtime, useData } from '../../store'
 import { Badge } from '../../components/ui'
-import { OrgSwitcher } from '../../components/OrgSwitcher'
 import { feedback } from '../../feedback'
 import { setTheme, type Theme } from '../../theme'
 import { NotificationSettings } from '../../components/NotificationSettings'
@@ -19,7 +18,6 @@ export default function Profile() {
     <div className="stack-lg">
       <h1>{me.name}</h1>
       <NotificationSettings />
-      <OrgSwitcher />
       <section className="stack">
         <h2>Habilitations</h2>
         {me.certs.map((c) => (

@@ -19,7 +19,7 @@ export default function Signup() {
           <CheckCircle2 size={44} color="var(--ok)" style={{ margin: '0 auto' }} aria-hidden="true" />
           <h2>Demande envoyée</h2>
           <p>Un e-mail de confirmation vient de partir à <strong>{f.email}</strong>. En cas d’accord, vous recevrez un lien de connexion à cette adresse.</p>
-          <Link className="btn" to="/">Retour à la connexion</Link>
+          <Link className="btn" to="/">Retour à l’accueil</Link>
         </div>
       ) : (
         <form className="card stack" onSubmit={async (e) => {
@@ -37,7 +37,7 @@ export default function Signup() {
           <div style={{ position: 'absolute', left: '-9999px' }} aria-hidden="true"><label>Site web<input tabIndex={-1} autoComplete="off" value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} /></label></div>
           {state === 'error' && <p role="alert" style={{ color: 'var(--bad)' }}>{err}</p>}
           <button className="btn primary block" disabled={state === 'sending'}>{state === 'sending' ? 'Envoi…' : 'Envoyer ma demande'}</button>
-          <p className="small muted center"><Link to="/">J’ai déjà un accès</Link></p>
+          <p className="small muted center"><Link to="/login">J’ai déjà un accès</Link></p>
         </form>
       )}
     </div></div>

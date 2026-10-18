@@ -6,7 +6,7 @@ import type { Principal } from './auth'
 import type { Config } from './config'
 import type { Db } from './db'
 import type { Mailer } from './mailer'
-import { estimateAmount, PLANS, planByCode, type OrgOffer, type Usage } from './plans'
+import { estimateAmount, getPlan, loadPlans, type OrgOffer, type Usage } from './plans'
 
 type Env = { Variables: { who: Principal } }
 type Mw = (c: Context<Env>, next: () => Promise<void>) => Promise<Response | void>
@@ -49,6 +49,7 @@ const ORG_SQL = `
          (select max(d.updated_at) from docs d where d.org_id = o.id) as last_activity,
          (select max(a.at) from audit_log a where a.org_id = o.id and a.action = 'login') as last_login
     from organisations o`
+const ORG_FILTER = `o.kind = 'client'`
 
 const offerOf = (r: OrgRow): OrgOffer => ({ plan: r.plan, maxTechs: r.max_techs, maxElevators: r.max_elevators, priceMonthly: r.price_monthly, extraTechPrice: r.extra_tech_price, extraElevatorPrice: r.extra_elevator_price })
 
@@ -65,13 +66,13 @@ export function shapeOrg(r: OrgRow, now = today()) {
 
 export async function loadOrgs(db: Db, id?: string) {
   const since = new Date(Date.now() - 30 * 86400_000).toISOString()
-  const rows = (await db.query<OrgRow>(`${ORG_SQL} ${id ? 'where o.id = $2' : ''} order by o.created_at desc`, id ? [since, id] : [since])).rows
+  const rows = (await db.query<OrgRow>(`${ORG_SQL} where ${ORG_FILTER} ${id ? 'and o.id = $2' : ''} order by o.created_at desc`, id ? [since, id] : [since])).rows
   return rows.map((r) => shapeOrg(r))
 }
 
 /** Crée une entreprise avec son premier administrateur (compte créé si l'adresse est nouvelle). */
 export async function createOrganisationWithAdmin(db: Db, uid: (p: string) => string, input: { name: string; adminName: string; adminEmail: string; plan?: string }) {
-  const preset = planByCode(input.plan ?? 'essai') ?? PLANS[0]
+  const preset = (await getPlan(db, input.plan ?? 'essai')) ?? (await loadPlans(db))[0]
   const orgId = randomUUID()
   const techId = uid('t')
   const trialEnds = preset.trialDays ? addDays(today(), preset.trialDays) : null
@@ -114,7 +115,7 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
   app.get('/api/operator/overview', ...op, async (c) => {
     const orgs = await loadOrgs(db)
     const pending = (await db.query<{ n: number }>(`select count(*)::int as n from signup_requests where status = 'pending'`)).rows[0].n
-    return c.json({ orgs, pendingSignups: pending, plans: PLANS })
+    return c.json({ orgs, pendingSignups: pending, plans: await loadPlans(db) })
   })
 
   /* ---------- création d'une entreprise + premier administrateur ---------- */
@@ -122,7 +123,7 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     const who = c.get('who')
     const parsed = z.object({ name: z.string().trim().min(2).max(120), adminName: z.string().trim().min(2).max(120), adminEmail: emailSchema, plan: z.string().max(30).optional() }).safeParse(await c.req.json().catch(() => null))
     if (!parsed.success) return c.json({ error: 'invalid' }, 400)
-    if (parsed.data.plan && !planByCode(parsed.data.plan)) return c.json({ error: 'unknown_plan' }, 400)
+    if (parsed.data.plan && !(await getPlan(db, parsed.data.plan))) return c.json({ error: 'unknown_plan' }, 400)
     const r = await createOrganisationWithAdmin(db, uid, parsed.data)
     await audit(r.orgId, who.userId, 'operator.org.create', undefined, r.orgId, { adminEmail: parsed.data.adminEmail, plan: parsed.data.plan ?? 'essai' })
     await welcomeAdmin(r.userId, parsed.data.adminEmail, parsed.data.adminName, parsed.data.name, r.existingUser)
@@ -137,7 +138,7 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
       plan: z.string().max(30), trialEndsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
       maxTechs: int.nullable(), maxElevators: int.nullable(), priceMonthly: int, extraTechPrice: int, extraElevatorPrice: int, notes: z.string().max(2000).default(''),
     }).safeParse(await c.req.json().catch(() => null))
-    if (!parsed.success || !planByCode(parsed.data.plan)) return c.json({ error: 'invalid' }, 400)
+    if (!parsed.success || !(await getPlan(db, parsed.data.plan))) return c.json({ error: 'invalid' }, 400)
     const o = parsed.data
     const r = await db.query(
       `update organisations set plan=$2, trial_ends_on=$3, max_techs=$4, max_elevators=$5, price_monthly=$6, extra_tech_price=$7, extra_elevator_price=$8, notes=$9 where id=$1 returning id`,
@@ -166,6 +167,47 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     return c.json({ ok: true })
   })
 
+  /* ---------- catalogue des offres ---------- */
+  const int = z.number().int().min(0).max(1_000_000_000)
+  const planBody = z.object({
+    name: z.string().trim().min(2).max(60), maxTechs: int.nullable(), maxElevators: int.nullable(), priceMonthly: int, extraTechPrice: int, extraElevatorPrice: int,
+    trialDays: z.number().int().min(1).max(365).nullable().default(null), archived: z.boolean().default(false),
+  })
+  app.get('/api/operator/plans', ...op, async (c) => c.json({ plans: await loadPlans(db) }))
+  app.post('/api/operator/plans', ...op, async (c) => {
+    const who = c.get('who')
+    const parsed = planBody.extend({ code: z.string().trim().toLowerCase().regex(/^[a-z0-9-]{2,30}$/) }).safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) return c.json({ error: 'invalid' }, 400)
+    const p = parsed.data
+    if (await getPlan(db, p.code)) return c.json({ error: 'code_taken' }, 409)
+    const sort = ((await db.query<{ m: number | null }>('select max(sort) as m from plans')).rows[0].m ?? 0) + 10
+    await db.query('insert into plans (code, name, max_techs, max_elevators, price_monthly, extra_tech_price, extra_elevator_price, trial_days, archived, sort) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+      [p.code, p.name, p.maxTechs, p.maxElevators, p.priceMonthly, p.extraTechPrice, p.extraElevatorPrice, p.trialDays, p.archived, sort])
+    await audit(NIL, who.userId, 'operator.plan.create', undefined, p.code, { name: p.name, priceMonthly: p.priceMonthly })
+    return c.json({ ok: true, plans: await loadPlans(db) }, 201)
+  })
+  app.put('/api/operator/plans/:code', ...op, async (c) => {
+    const who = c.get('who')
+    const parsed = planBody.safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) return c.json({ error: 'invalid' }, 400)
+    const p = parsed.data
+    const r = await db.query('update plans set name=$2, max_techs=$3, max_elevators=$4, price_monthly=$5, extra_tech_price=$6, extra_elevator_price=$7, trial_days=$8, archived=$9 where code=$1 returning code',
+      [c.req.param('code'), p.name, p.maxTechs, p.maxElevators, p.priceMonthly, p.extraTechPrice, p.extraElevatorPrice, p.trialDays, p.archived])
+    if (!r.rows.length) return c.json({ error: 'not_found' }, 404)
+    await audit(NIL, who.userId, 'operator.plan.update', undefined, c.req.param('code'), { name: p.name, priceMonthly: p.priceMonthly, archived: p.archived })
+    return c.json({ ok: true, plans: await loadPlans(db) })
+  })
+  app.delete('/api/operator/plans/:code', ...op, async (c) => {
+    const who = c.get('who')
+    const code = c.req.param('code') ?? ''
+    const used = (await db.query<{ n: number }>('select count(*)::int as n from organisations where plan = $1', [code])).rows[0].n
+    if (used) return c.json({ error: 'in_use', count: used }, 409) // à archiver plutôt que supprimer
+    const r = await db.query('delete from plans where code = $1 returning code', [code])
+    if (!r.rows.length) return c.json({ error: 'not_found' }, 404)
+    await audit(NIL, who.userId, 'operator.plan.delete', undefined, code)
+    return c.json({ ok: true, plans: await loadPlans(db) })
+  })
+
   /* ---------- demandes d'inscription ---------- */
   app.get('/api/operator/signups', ...op, async (c) => {
     const status = c.req.query('status')
@@ -180,7 +222,7 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
   app.post('/api/operator/signups/:id/approve', ...op, async (c) => {
     const who = c.get('who')
     const parsed = z.object({ plan: z.string().max(30).optional() }).safeParse(await c.req.json().catch(() => ({})))
-    if (!parsed.success || (parsed.data.plan && !planByCode(parsed.data.plan))) return c.json({ error: 'invalid' }, 400)
+    if (!parsed.success || (parsed.data.plan && !(await getPlan(db, parsed.data.plan)))) return c.json({ error: 'invalid' }, 400)
     const out = await db.tx(async (t) => {
       const req = (await t.query<{ id: string; company: string; contact_name: string; email: string; status: string }>('select id, company, contact_name, email, status from signup_requests where id = $1 for update', [pid(c)])).rows[0]
       if (!req) return { status: 404 as const }
@@ -259,8 +301,8 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
 
   /* ---------- opérateurs ---------- */
   app.get('/api/operator/operators', ...op, async (c) => {
-    const rows = (await db.query(`select o.user_id as "userId", u.email, o.created_at as "createdAt" from operators o join users u on u.id = o.user_id order by o.created_at`)).rows
-    return c.json({ operators: rows, fromEnv: config.operatorEmails })
+    const rows = (await db.query<{ userId: string; email: string; createdAt: string }>(`select o.user_id as "userId", u.email, o.created_at as "createdAt" from operators o join users u on u.id = o.user_id order by o.created_at`)).rows
+    return c.json({ operators: rows.map((r) => ({ ...r, fromEnv: config.operatorEmails.includes(r.email.toLowerCase()) })), fromEnv: config.operatorEmails })
   })
   app.post('/api/operator/operators', ...op, async (c) => {
     const who = c.get('who')
@@ -276,6 +318,8 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     const who = c.get('who')
     const target = c.req.param('userId') ?? ''
     if (target === who.userId) return c.json({ error: 'cannot_remove_self' }, 400)
+    const t = (await db.query<{ email: string }>('select email from users where id = $1', [target])).rows[0]
+    if (t && config.operatorEmails.includes(t.email.toLowerCase())) return c.json({ error: 'env_operator' }, 409) // défini par OPERATOR_EMAILS : à retirer dans la configuration
     await db.query('delete from operators where user_id = $1', [target])
     await audit(NIL, who.userId, 'operator.operators.remove', undefined, target)
     return c.json({ ok: true })

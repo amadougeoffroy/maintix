@@ -36,7 +36,7 @@ export interface Deps {
 type Env = { Variables: { who: Principal } }
 
 const COOKIE_PLAIN = 'cabine_session'
-const SUSPENDED_OK = ['/api/auth/session', '/api/auth/logout', '/api/auth/switch-org', '/api/orgs', '/api/operator/']
+const SUSPENDED_OK = ['/api/auth/session', '/api/auth/logout', '/api/operator/']
 
 /** Résumé compact d'une modification : clés changées, avec ancienne et nouvelle valeur pour les valeurs courtes. */
 export function summarize(before: Doc | null, after: Doc, created: boolean) {
@@ -114,7 +114,7 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     const who = token ? await principalFromSession(db, token) : null
     if (!who) return c.json({ error: 'unauthenticated' }, 401)
     // entreprise suspendue : seuls la session, la déconnexion, le changement d'entreprise et la console opérateur restent accessibles
-    if (who.orgStatus === 'suspended' && !SUSPENDED_OK.some((p) => c.req.path === p || (p.endsWith('/') && c.req.path.startsWith(p) && who.operator))) {
+    if (who.orgStatus === 'suspended' && !who.operator && !SUSPENDED_OK.some((p) => c.req.path === p || (p.endsWith('/') && c.req.path.startsWith(p) && who.operator))) {
       return c.json({ error: 'org_suspended', reason: who.suspendedReason }, 403)
     }
     c.set('who', who)
@@ -125,14 +125,34 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
 
   const sessionView = (w: Principal) => ({
     user: { id: w.userId, email: w.email }, org: { id: w.orgId, name: w.orgName }, role: w.role, fullName: w.fullName, techId: w.techId, clientId: w.clientId,
-    operator: w.operator, orgStatus: w.orgStatus, suspendedReason: w.suspendedReason,
+    operator: w.operator, orgStatus: w.orgStatus, suspendedReason: w.suspendedReason, orgKind: w.orgKind, impersonating: w.impersonating,
   })
 
-  /** Les adresses listées dans OPERATOR_EMAILS deviennent opérateurs à leur première connexion. */
+  /** Entreprise « plateforme » : accueil des opérateurs, jamais listée ni facturée. Créée au besoin. */
+  async function ensurePlatformOrg(): Promise<string> {
+    const found = (await db.query<{ id: string }>(`select id from organisations where kind = 'platform' limit 1`)).rows[0]
+    if (found) return found.id
+    const id = randomUUID()
+    await db.query(`insert into organisations (id, name, plan, kind) values ($1, 'Maintix', 'interne', 'platform')`, [id])
+    return id
+  }
+
+  /** Les adresses de OPERATOR_EMAILS sont toujours opérateurs : compte créé au besoin, rattaché à l'entreprise plateforme. */
+  async function provisionEnvOperator(email: string): Promise<string | null> {
+    email = email.toLowerCase()
+    if (!config.operatorEmails.includes(email)) return null
+    const orgId = await ensurePlatformOrg()
+    return db.tx(async (t) => {
+      let userId = (await t.query<{ id: string }>('select id from users where email = $1', [email])).rows[0]?.id
+      if (!userId) { userId = randomUUID(); await t.query('insert into users (id, email) values ($1,$2)', [userId, email]) }
+      await t.query(`insert into members (user_id, org_id, role, full_name) values ($1,$2,'admin',$3) on conflict do nothing`, [userId, orgId, email.split('@')[0]])
+      await t.query('insert into operators (user_id) values ($1) on conflict do nothing', [userId])
+      return userId
+    })
+  }
   async function grantOperatorFromEnv(userId: string) {
-    if (!config.operatorEmails.length) return
     const u = (await db.query<{ email: string }>('select email from users where id = $1', [userId])).rows[0]
-    if (u && config.operatorEmails.includes(u.email.toLowerCase())) await db.query('insert into operators (user_id) values ($1) on conflict do nothing', [userId])
+    if (u) await provisionEnvOperator(u.email)
   }
 
   async function sendLoginLink(userId: string, email: string) {
@@ -194,7 +214,7 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     const created = await db.tx(async (t) => {
       await t.query('lock table organisations in exclusive mode') // évite deux installations simultanées
       if ((await t.query('select 1 from organisations limit 1')).rows.length) return false
-      await t.query(`insert into organisations (id, name, plan) values ($1,$2,'interne')`, [orgId, orgName])
+      await t.query(`insert into organisations (id, name, plan, kind) values ($1,$2,'interne','platform')`, [orgId, orgName])
       await t.query('insert into users (id, email) values ($1,$2)', [userId, adminEmail])
       await t.query('insert into operators (user_id) values ($1)', [userId]) // le premier compte est opérateur de la plateforme
       await t.query(`insert into members (user_id, org_id, role, full_name, tech_id) values ($1,$2,'admin',$3,$4)`, [userId, orgId, adminName, techId])
@@ -212,8 +232,10 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     const parsed = z.object({ email: emailSchema }).safeParse(await c.req.json().catch(() => null))
     if (!parsed.success) return c.json({ error: 'invalid' }, 400)
     if (!(await limit(`ip:${ip(c)}`, 20, HOUR)) || !(await limit(`email:${parsed.data.email}`, 5, HOUR))) return c.json({ error: 'rate_limited' }, 429)
+    const envId = await provisionEnvOperator(parsed.data.email)
     const u = await db.query<{ id: string }>('select u.id from users u join members m on m.user_id = u.id where u.email = $1 limit 1', [parsed.data.email])
-    if (u.rows[0]) await sendLoginLink(u.rows[0].id, parsed.data.email)
+    const id = envId ?? u.rows[0]?.id
+    if (id) await sendLoginLink(id, parsed.data.email)
     return c.json({ ok: true }) // même réponse que l'e-mail existe ou non
   })
 
@@ -226,7 +248,7 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     await grantOperatorFromEnv(userId)
     const m = await db.query<{ org_id: string }>(
       `select m.org_id from members m join users u on u.id = m.user_id join organisations o on o.id = m.org_id where m.user_id = $1
-        order by (o.status = 'active') desc, (m.org_id = u.last_org_id) desc, m.created_at desc limit 1`, [userId],
+        order by (o.kind = 'platform') desc, (o.status = 'active') desc, (m.org_id = u.last_org_id) desc, m.created_at desc limit 1`, [userId],
     )
     if (!m.rows[0]) return c.json({ error: 'no_membership' }, 403)
     const session = await createSession(db, userId, m.rows[0].org_id)
@@ -319,30 +341,7 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     return c.json({ onboarding: r.rows[0]?.onboarding ?? {} })
   })
 
-  /* ---------- plusieurs entreprises ---------- */
-  app.get('/api/orgs', requireAuth, async (c) => {
-    const who = c.get('who')
-    const r = await db.query(
-      `select o.id, o.name, m.role, m.full_name as "fullName", (o.id = $2) as current
-         from members m join organisations o on o.id = m.org_id where m.user_id = $1 order by o.name`, [who.userId, who.orgId],
-    )
-    return c.json({ orgs: r.rows })
-  })
-
-  app.post('/api/auth/switch-org', requireAuth, async (c) => {
-    const who = c.get('who')
-    const parsed = z.object({ orgId: z.string().uuid() }).safeParse(await c.req.json().catch(() => null))
-    if (!parsed.success) return c.json({ error: 'invalid' }, 400)
-    const m = await db.query('select 1 from members where user_id=$1 and org_id=$2', [who.userId, parsed.data.orgId])
-    if (!m.rows.length) return c.json({ error: 'forbidden' }, 403)
-    const token = getCookie(c, COOKIE)!
-    await db.query('update sessions set org_id=$2 where token_hash=$1', [sha256(token), parsed.data.orgId])
-    await db.query('update users set last_org_id=$2 where id=$1', [who.userId, parsed.data.orgId])
-    const next = (await principalFromSession(db, token))!
-    await audit(next.orgId, next.userId, 'org.switch')
-    return c.json(sessionView(next))
-  })
-
+  // Pas de bascule d'entreprise : un compte appartient à une seule entreprise. Seuls les opérateurs entrent dans une entreprise (voir /api/operator/orgs/:id/enter).
   // La création d'une entreprise est réservée aux opérateurs de la plateforme : voir /api/operator/orgs et /api/public/signup.
 
 
@@ -369,6 +368,8 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     }
     const dup = await db.query(`select 1 from members m join users u on u.id=m.user_id where m.org_id=$1 and u.email=$2`, [who.orgId, email])
     if (dup.rows.length) return c.json({ error: 'already_member' }, 409)
+    const elsewhere = await db.query(`select 1 from members m join users u on u.id=m.user_id where m.org_id<>$1 and u.email=$2`, [who.orgId, email])
+    if (elsewhere.rows.length) return c.json({ error: 'in_other_org' }, 409) // un compte = une entreprise
     const userId = await db.tx(async (t) => {
       const found = await t.query<{ id: string }>('select id from users where email=$1', [email])
       const id = found.rows[0]?.id ?? randomUUID()
@@ -689,6 +690,29 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
   app.get('/api/org/plan', requireAuth, requireRole('admin', 'bureau'), async (c) => {
     const org = (await loadOrgs(db, c.get('who').orgId))[0]
     return c.json({ status: org.status, offer: org.offer, usage: org.usage, flags: org.flags, estimate: org.estimate })
+  })
+
+  /* ---------- opérateur : entrer dans une entreprise cliente et revenir à la console ---------- */
+  const requireOperator = async (c: Context<Env>, next: () => Promise<void>) => (c.get('who').operator ? next() : c.json({ error: 'forbidden' }, 403))
+  const moveSession = async (c: Context<Env>, orgId: string) => {
+    const token = getCookie(c, COOKIE)!
+    await db.query('update sessions set org_id=$2 where token_hash=$1', [sha256(token), orgId])
+    return (await principalFromSession(db, token))!
+  }
+  app.post('/api/operator/orgs/:id/enter', requireAuth, requireOperator, async (c) => {
+    const who = c.get('who')
+    const target = (await db.query<{ id: string }>(`select id from organisations where id = $1 and kind = 'client'`, [c.req.param('id') ?? ''])).rows[0]
+    if (!target) return c.json({ error: 'not_found' }, 404)
+    const next = await moveSession(c, target.id)
+    await audit(target.id, who.userId, 'operator.org.enter')
+    return c.json(sessionView(next))
+  })
+  app.post('/api/operator/leave', requireAuth, requireOperator, async (c) => {
+    const who = c.get('who')
+    const home = (await db.query<{ id: string }>(`select o.id from organisations o join members m on m.org_id = o.id where m.user_id = $1 order by (o.kind = 'platform') desc, m.created_at limit 1`, [who.userId])).rows[0]
+      ?? { id: await ensurePlatformOrg() }
+    const next = await moveSession(c, home.id)
+    return c.json(sessionView(next))
   })
 
   /* ---------- console opérateur, inscriptions, facturation de la plateforme ---------- */

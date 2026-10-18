@@ -18,7 +18,7 @@ export default function Auth() {
   }, [q, nav])
   return (
     <div className="hero"><div className="box center stack">
-      {error ? (<><h1>Lien invalide ou expiré</h1><p className="muted">Les liens sont valables 15 minutes et ne servent qu’une fois.</p><Link className="btn primary" to="/">Recevoir un nouveau lien</Link></>) : <p role="status">Connexion…</p>}
+      {error ? (<><h1>Lien invalide ou expiré</h1><p className="muted">Les liens sont valables 15 minutes et ne servent qu’une fois.</p><Link className="btn primary" to="/login">Recevoir un nouveau lien</Link></>) : <p role="status">Connexion…</p>}
     </div></div>
   )
 }

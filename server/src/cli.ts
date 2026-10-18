@@ -12,6 +12,16 @@ export async function loginLinkFor(db: Db, appUrl: string, email: string): Promi
   return `${appUrl.replace(/\/$/, '')}/#/auth?token=${await createLoginToken(db, u.rows[0].id)}`
 }
 
+/** Efface toutes les données (comptes, entreprises, documents, journaux) en gardant le schéma, le catalogue d'offres et l'historique des migrations. */
+export async function resetDatabase(db: Db): Promise<number> {
+  const keep = ['schema_migrations', 'plans']
+  const tables = (await db.query<{ tablename: string }>(`select tablename from pg_tables where schemaname = 'public'`)).rows.map((r) => r.tablename).filter((t) => !keep.includes(t))
+  if (tables.length) await db.query(`truncate ${tables.map((t) => `"${t}"`).join(', ')} restart identity cascade`)
+  const seqs = (await db.query<{ sequencename: string }>(`select sequencename from pg_sequences where schemaname = 'public'`)).rows
+  for (const q of seqs) await db.query(`alter sequence "${q.sequencename}" restart`)
+  return tables.length
+}
+
 /** Donne l'accès à la console opérateur à un utilisateur existant. */
 export async function makeOperator(db: Db, email: string): Promise<boolean> {
   const u = await db.query<{ id: string }>('select id from users where email = $1', [email.trim().toLowerCase()])
@@ -22,8 +32,9 @@ export async function makeOperator(db: Db, email: string): Promise<boolean> {
 
 async function main() {
   const [cmd, email] = process.argv.slice(2)
-  if (!['login-link', 'operator-add'].includes(cmd) || !email) {
-    console.error('Usage : node dist/cli.js login-link <e-mail>   |   node dist/cli.js operator-add <e-mail>')
+  const reset = cmd === 'reset-database'
+  if (reset ? email !== '--yes-erase-everything' : !['login-link', 'operator-add'].includes(cmd) || !email) {
+    console.error('Usage : node dist/cli.js login-link <e-mail>   |   node dist/cli.js operator-add <e-mail>\n        node dist/cli.js reset-database --yes-erase-everything   (efface TOUTES les données, irréversible)')
     process.exit(2)
   }
   const config = loadConfig()
@@ -33,6 +44,11 @@ async function main() {
   const db = pgDb(config.databaseUrl)
   try {
     await migrate(db, resolve(process.env.MIGRATIONS_DIR ?? 'migrations'))
+    if (reset) {
+      const n = await resetDatabase(db)
+      console.log(`Base vidée (${n} tables). Au prochain démarrage, les adresses de OPERATOR_EMAILS redeviennent opérateurs ; sinon, créez le premier compte sur /#/setup.`)
+      return
+    }
     if (cmd === 'operator-add') {
       const ok = await makeOperator(db, email)
       if (!ok) { console.error(`Aucun utilisateur avec l'adresse ${email} : il doit d'abord être membre d'une entreprise.`); process.exit(1) }

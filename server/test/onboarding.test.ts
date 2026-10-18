@@ -23,13 +23,10 @@ describe('didacticiel', () => {
     expect((await admin.post('/api/me/onboarding', 'x')).status).toBe(400)
     expect(await get(admin)).toEqual({})
   })
-  it('est propre à chaque membre et à chaque entreprise', async () => {
+  it('est propre à chaque membre', async () => {
     await admin.post('/api/me/onboarding', { welcomeSeen: true })
     const tech = api(env, await invite(env, admin, 'tech@x.test', 'tech'))
     expect(await get(tech)).toEqual({}) // un autre membre n'a rien vu
-    const orgId = await createOrg(admin, 'Seconde', 'admin@acme.test')
-    await admin.post('/api/auth/switch-org', { orgId })
-    expect(await get(admin)).toEqual({}) // même personne, autre entreprise : didacticiel à refaire
   })
   it('exige une session', async () => {
     expect((await env.app.request('/api/me/onboarding')).status).toBe(401)

@@ -18,6 +18,10 @@ export interface Principal {
   suspendedReason: string | null
   /** opérateur de la plateforme (console opérateur) */
   operator: boolean
+  /** entreprise cliente ou entreprise « plateforme » (accueil des opérateurs) */
+  orgKind: 'client' | 'platform'
+  /** opérateur entré dans une entreprise cliente dont il n'est pas membre */
+  impersonating: boolean
 }
 
 export const LOGIN_TTL_MIN = 15
@@ -58,21 +62,26 @@ export async function createSession(db: Db, userId: string, orgId: string): Prom
 
 export async function principalFromSession(db: Db, token: string): Promise<Principal | null> {
   const r = await db.query<{
-    user_id: string; email: string; org_id: string; org_name: string; role: Role; full_name: string; tech_id: string | null; client_id: string | null
-    org_status: 'active' | 'suspended'; suspended_reason: string | null; is_operator: boolean
+    user_id: string; email: string; org_id: string; org_name: string; role: Role | null; full_name: string | null; tech_id: string | null; client_id: string | null
+    org_status: 'active' | 'suspended'; suspended_reason: string | null; is_operator: boolean; org_kind: 'client' | 'platform'
   }>(
     `select s.user_id, u.email, s.org_id, o.name as org_name, m.role, m.full_name, m.tech_id, m.client_id,
-            o.status as org_status, o.suspended_reason, (op.user_id is not null) as is_operator
+            o.status as org_status, o.suspended_reason, o.kind as org_kind, (op.user_id is not null) as is_operator
        from sessions s
        join users u on u.id = s.user_id
        join organisations o on o.id = s.org_id
-       join members m on m.user_id = s.user_id and m.org_id = s.org_id
+       left join members m on m.user_id = s.user_id and m.org_id = s.org_id
        left join operators op on op.user_id = s.user_id
-      where s.token_hash = $1 and s.expires_at > now()`,
+      where s.token_hash = $1 and s.expires_at > now() and (m.user_id is not null or op.user_id is not null)`,
     [sha256(token)],
   )
   const x = r.rows[0]
-  return x ? { userId: x.user_id, email: x.email, orgId: x.org_id, orgName: x.org_name, role: x.role, fullName: x.full_name, techId: x.tech_id, clientId: x.client_id, orgStatus: x.org_status, suspendedReason: x.suspended_reason, operator: x.is_operator } : null
+  if (!x) return null
+  const impersonating = !x.role // opérateur sans appartenance à cette entreprise : il agit en administrateur
+  return {
+    userId: x.user_id, email: x.email, orgId: x.org_id, orgName: x.org_name, role: x.role ?? 'admin', fullName: x.full_name ?? 'Opérateur Maintix',
+    techId: x.tech_id, clientId: x.client_id, orgStatus: x.org_status, suspendedReason: x.suspended_reason, operator: x.is_operator, orgKind: x.org_kind, impersonating,
+  }
 }
 
 export const deleteSession = (db: Db, token: string) => db.query('delete from sessions where token_hash = $1', [sha256(token)])

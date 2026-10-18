@@ -4,7 +4,6 @@ import { Bell, Building2, LifeBuoy, Users as UsersIcon } from 'lucide-react'
 import { api, ApiError, type Member } from '../../api'
 import { actions, certStatus, runtime, useData } from '../../store'
 import type { OrgSettings } from '../../types'
-import { OrgSwitcher } from '../../components/OrgSwitcher'
 import { PlanCard } from '../../components/PlanCard'
 import { feedback } from '../../feedback'
 import { patchOnboarding, useOnboarding } from '../../onboarding'
@@ -168,7 +167,7 @@ export default function Settings() {
           <NavLink key={k} to={`/office/settings/${k}`} className={({ isActive }) => `subtab ${isActive ? 'on' : ''}`}><Icon size={18} aria-hidden="true" />{label}</NavLink>
         ))}
       </nav>
-      {current === 'entreprise' && (<><OrgSwitcher /><PlanCard /><OrgForm /></>)}
+      {current === 'entreprise' && (<><PlanCard /><OrgForm /></>)}
       {current === 'equipe' && <Team />}
       {current === 'alertes' && <NotificationSettings />}
       {current === 'aide' && (<><Help /><Data /></>)}

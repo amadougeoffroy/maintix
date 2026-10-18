@@ -53,6 +53,7 @@ export async function bootstrap(env: Env, email = 'admin@acme.test') {
 export const api = (env: Env, cookie: string) => ({
   get: (path: string) => env.app.request(path, { headers: { cookie } }),
   post: (path: string, body: unknown) => env.app.request(path, json(body, { cookie })),
+  put: (path: string, body: unknown) => env.app.request(path, { ...json(body, { cookie }), method: 'PUT' }),
   del: (path: string) => env.app.request(path, { method: 'DELETE', headers: { cookie, origin: APP_URL, 'content-type': 'application/json' } }),
 })
 

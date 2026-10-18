@@ -13,6 +13,8 @@ export const toSession = (i: SessionInfo): State['session'] => ({
   fullName: i.fullName,
   orgName: i.org.name,
   operator: !!i.operator,
+  orgKind: i.orgKind ?? 'client',
+  impersonating: !!i.impersonating,
   orgStatus: i.orgStatus ?? 'active',
   suspendedReason: i.suspendedReason ?? null,
 })
@@ -42,12 +44,12 @@ export async function bootServerSession() {
   }
 }
 
-/** Change d'entreprise : envoie d'abord les modifications en attente, puis recharge les données de l'autre entreprise. */
-export async function switchOrg(orgId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+/** Opérateur : bascule la session vers une autre entreprise (ou la plateforme) après avoir envoyé les modifications en attente. */
+async function moveSession(call: () => Promise<SessionInfo>): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     await syncNow()
     if (getSyncStatus().pending > 0) return { ok: false, error: 'Des modifications ne sont pas encore synchronisées : réessayez dans un instant.' }
-    const info = await api.switchOrg(orgId)
+    const info = await call()
     await stopSync(true)
     actions.clearLocal()
     await enterSession(info)
@@ -56,6 +58,10 @@ export async function switchOrg(orgId: string): Promise<{ ok: true } | { ok: fal
     return { ok: false, error: 'Changement impossible (hors ligne ?).' }
   }
 }
+/** Opérateur : entre dans une entreprise cliente (en administrateur). */
+export const enterOrg = (orgId: string) => moveSession(() => api.opEnter(orgId))
+/** Opérateur : retourne à la console. */
+export const leaveToConsole = () => moveSession(() => api.opLeave())
 
 export async function signOut(): Promise<boolean> {
   if (!runtime.server) {

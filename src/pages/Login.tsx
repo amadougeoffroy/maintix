@@ -15,7 +15,7 @@ function EmailLogin() {
       setState('sending')
       try { await api.requestLink(email); setState('sent') } catch (x) { setErr(x instanceof ApiError && x.status === 429 ? 'Trop de demandes, réessayez plus tard.' : 'Impossible d’envoyer le lien.'); setState('error') }
     }}>
-      <h2>Connexion</h2>
+      <h2>Recevoir mon lien de connexion</h2>
       {state === 'sent' ? (
         <p role="status">Si cette adresse est enregistrée, un lien de connexion vient de vous être envoyé. Il est valable 15 minutes.</p>
       ) : (
@@ -42,7 +42,7 @@ export default function Login() {
           <h1 className="sr-only">Maintix</h1>
           <p className="muted">Chaque visite, tracée.</p>
         </div>
-        {runtime.server ? <EmailLogin /> : (
+        {runtime.server ? <><EmailLogin /><p className="center"><Link to="/">← Retour à l’accueil</Link></p></> : (
           <>
             <p className="muted center">Mode démonstration (aucun serveur détecté) : choisissez un profil.</p>
             <section className="stack">

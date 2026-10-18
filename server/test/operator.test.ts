@@ -84,8 +84,7 @@ describe('création d’une entreprise et de son premier administrateur', () => 
     await createOrg(op, 'Première SA', 'multi@x.test', 'Multi User')
     await createOrg(op, 'Seconde SA', 'multi@x.test', 'Multi User')
     expect((await env.db.query<{ n: number }>(`select count(*)::int as n from users where email = 'multi@x.test'`)).rows[0].n).toBe(1)
-    const orgs = (await (await api(env, await login(env, 'multi@x.test')).get('/api/orgs')).json()).orgs as unknown[]
-    expect(orgs).toHaveLength(2)
+    expect((await env.db.query<{ n: number }>(`select count(*)::int as n from members m join users u on u.id = m.user_id where u.email = 'multi@x.test'`)).rows[0].n).toBe(2)
   })
 })
 
@@ -137,7 +136,7 @@ describe('suspension', () => {
     await push(dg, [{ collection: 'sites', id: 's1', data: { id: 's1', clientId: 'c', name: 'S', address: 'x' } }, { collection: 'elevators', id: 'e1', data: { id: 'e1', siteId: 's1', label: 'A1', status: 'ok' } }])
     return { dg, id: (await orgByName('Suspendue SA')).id as string }
   }
-  it('bloque l’entreprise avec un motif, mais laisse voir la session, se déconnecter et changer d’entreprise', async () => {
+  it('bloque l’entreprise avec un motif, mais laisse voir la session et se déconnecter', async () => {
     const { dg, id } = await setup()
     expect((await op.post(`/api/operator/orgs/${id}/suspend`, { reason: 'Facture impayée' })).status).toBe(200)
     const sync = await dg.get('/api/sync/pull?since=0')
@@ -147,7 +146,6 @@ describe('suspension', () => {
     expect((await dg.get('/api/members')).status).toBe(403)
     const s = await (await dg.get('/api/auth/session')).json()
     expect(s).toMatchObject({ orgStatus: 'suspended', suspendedReason: 'Facture impayée' })
-    expect((await dg.get('/api/orgs')).status).toBe(200)
     expect((await dg.post('/api/auth/logout', {})).status).toBe(200)
   })
   it('désactive le signalement public et la page d’état de ses appareils', async () => {
@@ -165,14 +163,10 @@ describe('suspension', () => {
     expect(docs.map((d) => d.id)).toEqual(expect.arrayContaining(['s1', 'e1']))
     expect((await orgByName('Suspendue SA')).status).toBe('active')
   })
-  it('l’opérateur garde la console même si sa propre entreprise est suspendue, et la connexion préfère une entreprise active', async () => {
-    const orgId = (await orgByName('Acme Ascenseurs'))?.id ?? (await overview()).orgs[0].id
+  it('l’entreprise plateforme des opérateurs n’apparaît jamais dans la console', async () => {
     await createOrg(op, 'Active SA', 'amadou@sodebat.test', 'Amadou')
-    await op.post(`/api/operator/orgs/${orgId}/suspend`, { reason: 'test' })
+    expect((await overview()).orgs.map((o) => o.name)).toEqual(['Active SA'])
     expect((await op.get('/api/operator/overview')).status).toBe(200)
-    await env.app.request('/api/auth/request-link', json({ email: 'amadou@sodebat.test' }))
-    const res = await env.app.request('/api/auth/verify', json({ token: tokenFrom(env, 'amadou@sodebat.test') }))
-    expect((await res.json()).org.name).toBe('Active SA')
   })
   it('refuse les identifiants invalides', async () => {
     expect((await op.post(`/api/operator/orgs/${crypto.randomUUID()}/suspend`, {})).status).toBe(404)
@@ -258,7 +252,7 @@ describe('facturation de la plateforme', () => {
     expect((await op.post('/api/operator/billing/freeze', { month })).status).toBe(200)
     await op.post('/api/operator/billing/freeze', { month }) // idempotent
     const after = await (await op.get(`/api/operator/billing?month=${month}`)).json()
-    expect(after.frozen.filter((f: { orgId: string }) => f.orgId).length).toBe(2)
+    expect(after.frozen.filter((f: { orgId: string }) => f.orgId).length).toBe(1)
     expect(after.frozen.find((f: { plan: string }) => f.plan === 'essentiel')).toMatchObject({ techs: 0, amount: 35000 })
     const res = await op.get(`/api/operator/billing.csv?month=${month}`)
     expect(res.headers.get('content-disposition')).toContain(`usage-maintix-${month}.csv`)

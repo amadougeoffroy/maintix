@@ -21,6 +21,8 @@ export interface SessionInfo {
   user: { id: string; email: string }
   org: { id: string; name: string }
   operator?: boolean
+  orgKind?: 'client' | 'platform'
+  impersonating?: boolean
   orgStatus?: 'active' | 'suspended'
   suspendedReason?: string | null
   role: 'admin' | 'bureau' | 'tech' | 'client'
@@ -36,7 +38,8 @@ export interface OperatorOrg {
   estimate: { base: number; overTechs: number; overElevators: number; amount: number }
   flags: { overTechs: boolean; overElevators: boolean; trialExpired: boolean }
 }
-export interface PlanPreset { code: string; name: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialDays?: number }
+export interface PlanPreset { archived?: boolean; code: string; name: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialDays?: number }
+export interface PlanInput { name: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialDays: number | null; archived: boolean }
 export interface SignupRequest { id: string; company: string; contactName: string; email: string; phone: string | null; message: string | null; status: 'pending' | 'approved' | 'rejected'; createdAt: string; decidedAt: string | null; decisionReason: string | null; orgId: string | null }
 export interface BillingView {
   month: string; currency: 'FCFA'; totalEstimate: number
@@ -107,9 +110,6 @@ export const api = {
     for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== '') p.set(k, String(v))
     return call<{ entries: AuditEntry[]; more: boolean }>('GET', `/audit?${p}`)
   },
-  orgs: () => call<{ orgs: { id: string; name: string; role: string; fullName: string; current: boolean }[] }>('GET', '/orgs'),
-  switchOrg: (orgId: string) => call<SessionInfo>('POST', '/auth/switch-org', { orgId }),
-  createOrg: (name: string) => call<{ ok: true; orgId: string }>('POST', '/orgs', { name }),
   notifConfig: () => call<{ publicKey: string | null; smsConfigured: boolean; subscriptions: number; phone: string; escalationMinutes: number | null }>('GET', '/notifications/config'),
   subscribePush: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }) => call<{ ok: true }>('POST', '/notifications/subscribe', sub),
   unsubscribePush: (endpoint: string) => call<{ ok: true }>('POST', '/notifications/unsubscribe', { endpoint }),
@@ -128,7 +128,13 @@ export const api = {
   opReject: (id: string, reason: string) => call<{ ok: true }>('POST', `/operator/signups/${id}/reject`, { reason }),
   opBilling: (month: string) => call<BillingView>('GET', `/operator/billing?month=${month}`),
   opFreeze: (month: string) => call<{ ok: true; frozen: number }>('POST', '/operator/billing/freeze', { month }),
-  opOperators: () => call<{ operators: { userId: string; email: string; createdAt: string }[]; fromEnv: string[] }>('GET', '/operator/operators'),
+  opEnter: (id: string) => call<SessionInfo>('POST', `/operator/orgs/${id}/enter`, {}),
+  opLeave: () => call<SessionInfo>('POST', '/operator/leave', {}),
+  opPlans: () => call<{ plans: PlanPreset[] }>('GET', '/operator/plans'),
+  opCreatePlan: (b: PlanInput & { code: string }) => call<{ ok: true; plans: PlanPreset[] }>('POST', '/operator/plans', b),
+  opUpdatePlan: (code: string, b: PlanInput) => call<{ ok: true; plans: PlanPreset[] }>('PUT', `/operator/plans/${code}`, b),
+  opDeletePlan: (code: string) => call<{ ok: true; plans: PlanPreset[] }>('DELETE', `/operator/plans/${code}`, {}),
+  opOperators: () => call<{ operators: { userId: string; email: string; createdAt: string; fromEnv: boolean }[]; fromEnv: string[] }>('GET', '/operator/operators'),
   opAddOperator: (email: string) => call<{ ok: true }>('POST', '/operator/operators', { email }),
   opRemoveOperator: (id: string) => call<{ ok: true }>('DELETE', `/operator/operators/${id}`, {}),
   orgPlan: () => call<{ status: string; offer: Offer; usage: OrgUsage; flags: OperatorOrg['flags']; estimate: OperatorOrg['estimate'] }>('GET', '/org/plan'),

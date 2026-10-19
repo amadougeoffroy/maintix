@@ -6,6 +6,7 @@ import { byId, useData } from '../store'
 import { feedback } from '../feedback'
 import { leaveToConsole, signOut } from '../session'
 import { SyncBadge } from './SyncBadge'
+import { ThemeToggle } from './ThemeToggle'
 import { OfflineBanner } from './ui'
 import { WelcomeTour } from './WelcomeTour'
 
@@ -81,6 +82,7 @@ export function TechShell() {
       <header className="topbar">
         <p className="brandline"><Logo variant="dark" height={22} /><span className="who">{me?.name ?? s.session.fullName ?? 'Technicien'}{s.session.orgName ? <span className="org-chip">{s.session.orgName}</span> : null}</span></p>
         <SyncBadge />
+        <ThemeToggle />
         <button className="btn sm ghost" onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
       </header>
       <OfflineBanner />
@@ -180,6 +182,7 @@ export function OfficeShell() {
           <p className="brandline"><Logo variant="dark" height={22} /><span className="who"><span className="who-label">Bureau</span>{s.session.orgName ? <span className="org-chip">{s.session.orgName}</span> : null}</span></p>
           <NavLink to="/office/search" className="btn sm ghost" aria-label="Rechercher"><SearchIcon size={18} /></NavLink>
           <SyncBadge />
+          <ThemeToggle />
           <button className="btn sm ghost" onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
         </header>
         <OfflineBanner />
@@ -222,6 +225,7 @@ export function OperatorShell() {
       <SkipLink />
       <header className="topbar">
         <p className="brandline"><Logo variant="dark" height={22} /><span className="who">Console opérateur</span></p>
+        <ThemeToggle />
         <button className="btn sm ghost" onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
       </header>
       <OfflineBanner />
@@ -241,6 +245,7 @@ export function ClientShell() {
       <header className="topbar">
         <p className="brandline"><Logo variant="dark" height={22} /><span className="who">{c?.name ?? 'Portail client'}</span></p>
         <SyncBadge />
+        <ThemeToggle />
         <button className="btn sm ghost" onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
       </header>
       <Main className="content" />

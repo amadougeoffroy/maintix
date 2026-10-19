@@ -6,6 +6,8 @@ export type OnboardingFlags = Partial<Record<'welcomeSeen' | 'gettingStartedHidd
 interface Snap { loaded: boolean; flags: OnboardingFlags }
 
 let snap: Snap = { loaded: false, flags: {} }
+/** Changements faits sur cet appareil : ils l'emportent sur une lecture serveur arrivée en retard (sinon la visite guidée réapparaît). */
+let local: OnboardingFlags = {}
 const listeners = new Set<() => void>()
 const set = (next: Snap) => { snap = next; listeners.forEach((l) => l()) }
 export const useOnboarding = () => useSyncExternalStore((l) => (listeners.add(l), () => listeners.delete(l)), () => snap)
@@ -13,14 +15,15 @@ export const useOnboarding = () => useSyncExternalStore((l) => (listeners.add(l)
 /** Charge l'avancement du membre pour l'entreprise active (appelé à la connexion et au changement d'entreprise). */
 export async function loadOnboarding() {
   set({ loaded: false, flags: {} })
-  try { set({ loaded: true, flags: (await api.onboarding()).onboarding }) } catch { set({ loaded: true, flags: { welcomeSeen: true } }) } // en cas d'échec, ne pas importuner
+  try { set({ loaded: true, flags: { ...(await api.onboarding()).onboarding, ...local } }) } catch { set({ loaded: true, flags: { welcomeSeen: true } }) } // en cas d'échec, ne pas importuner
 }
 /** Mise à jour immédiate à l'écran, puis enregistrement serveur (le même didacticiel suit l'utilisateur d'un appareil à l'autre). */
 export function patchOnboarding(patch: OnboardingFlags) {
+  local = { ...local, ...patch }
   set({ ...snap, flags: { ...snap.flags, ...patch } })
   api.setOnboarding(patch).catch(() => {})
 }
-export const resetOnboarding = () => set({ loaded: false, flags: {} })
+export const resetOnboarding = () => { local = {}; set({ loaded: false, flags: {} }) }
 
 export interface Step { key: string; title: string; why: string; to: string; action: string; done: boolean; manual?: 'installDone' | 'teamDone' }
 

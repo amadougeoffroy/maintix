@@ -57,3 +57,16 @@ test('un client peut revenir en arrière depuis la fiche d’un appareil', async
   await page.getByRole('button', { name: /Retour/ }).click()
   await expect(page.getByRole('link', { name: 'Signaler une panne' }).first()).toBeVisible()
 })
+
+test('le bouton clair/sombre bascule le thème et le mémorise', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.goto('/')
+  await page.getByRole('button', { name: /Moussa/ }).click()
+  await page.getByRole('button', { name: 'Passer au thème sombre' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.getByRole('button', { name: 'Passer au thème clair' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await expect(page.getByRole('button', { name: 'Passer au thème sombre' })).toBeVisible()
+})

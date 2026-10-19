@@ -14,4 +14,5 @@ export function setTheme(t: Theme, persist = true) {
   else document.documentElement.setAttribute('data-theme', t)
   if (!persist) return
   try { if (t === 'auto') localStorage.removeItem(KEY); else localStorage.setItem(KEY, t) } catch { /* stockage indisponible */ }
+  window.dispatchEvent(new Event('maintix-theme')) // après l'écriture : les boutons relisent le choix mémorisé
 }

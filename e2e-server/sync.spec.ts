@@ -15,7 +15,7 @@ const waitLink = async (to: string) => {
   throw new Error('lien introuvable')
 }
 /** Ferme la visite guidée d'accueil si elle s'affiche (première connexion d'un membre dans une entreprise). */
-const skipWelcome = async (page: Page) => { await page.getByRole('button', { name: 'Passer' }).click({ timeout: 4000 }).catch(() => {}) }
+const skipWelcome = async (page: Page) => { await page.getByRole('button', { name: 'Passer', exact: true }).click({ timeout: 4000 }).catch(() => {}) }
 const synced = (page: Page) => expect(page.getByRole('status').filter({ hasText: 'Synchronisé' })).toBeVisible({ timeout: 15000 })
 
 const mailCount = (to: string) => { try { return readFileSync(MAIL, 'utf8').trim().split('\n').filter((l) => JSON.parse(l).to === to).length } catch { return 0 } }

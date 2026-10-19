@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { CalendarClock, FileCheck2, QrCode, Receipt, ShieldCheck, Smartphone, WifiOff, Building2, ArrowRight } from 'lucide-react'
 import { Logo } from '../brand/Logo'
 import { ElevatorShaft } from '../components/ElevatorShaft'
+import { ThemeToggle } from '../components/ThemeToggle'
 
 const FEATURES = [
   { icon: Smartphone, title: 'Visites sur mobile', text: 'Check-list guidée par zone, mesures, pièces, photos et signature du client, au doigt, sur le palier.' },
@@ -37,6 +38,7 @@ function FloorPanel() {
   }, [])
   return (
     <nav className="floor-panel" aria-label="Étages de la page">
+      <ThemeToggle className="theme-btn" />
       {FLOORS.map(([id, label, name]) => (
         <a key={id} href={`#${id}`} className={active === id ? 'on' : ''} aria-label={`Aller à : ${name}`} aria-current={active === id ? 'true' : undefined} title={name}
           onClick={(e) => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }) }}>{label}</a>

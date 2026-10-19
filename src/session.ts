@@ -19,6 +19,8 @@ export const toSession = (i: SessionInfo): State['session'] => ({
   suspendedReason: i.suspendedReason ?? null,
   suspendedReasonCode: i.suspendedReasonCode ?? null,
   suspendedReasonLabel: i.suspendedReasonLabel ?? null,
+  planEndsOn: i.planEndsOn ?? null,
+  planName: i.planName,
   payable: !!i.payable,
 })
 
@@ -35,7 +37,7 @@ export async function enterSession(info: SessionInfo) {
   remember(info.user.id)
   actions.setSession(toSession(info))
   void loadOnboarding()
-  await startSync({ onUnauthenticated: () => actions.setSession({ role: null, techId: null, clientId: null }) })
+  await startSync({ onUnauthenticated: () => { actions.setSession({ role: null, techId: null, clientId: null }); feedback.toast('Votre session a été fermée. Reconnectez-vous pour continuer.', 'info') } })
 }
 
 /** Au démarrage en mode serveur : reprend la session si le cookie est encore valide. */

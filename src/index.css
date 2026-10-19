@@ -219,7 +219,7 @@ button.subtab { font: inherit; cursor: pointer; }
 
 .op-banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 8px 16px; background: var(--signal); color: #1c1203; font-size: .9rem; }
 .op-banner .btn { background: #1c1203; color: #fff; border-color: #1c1203; min-height: 36px; }
-.op-banner span { display: inline-flex; gap: 8px; align-items: center; }
+.op-banner .banner-text { flex: 1 1 260px; margin: 0; line-height: 1.4; }
 @media print { .op-banner { display: none !important; } }
 
 /* ---------- page de présentation ---------- */
@@ -269,3 +269,8 @@ html { scroll-behavior: smooth; } @media (prefers-reduced-motion: reduce) { html
 .bar-col { flex: 1; display: grid; grid-template-rows: 1fr auto; justify-items: center; height: 100%; gap: 4px; }
 .bar { align-self: end; width: 100%; max-width: 40px; background: var(--brand); border-radius: 6px 6px 0 0; }
 .table-wrap { overflow-x: auto; }
+
+.renew-banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 10px 16px; background: #b91c1c; color: #fff; font-size: .92rem; }
+.renew-banner .banner-text { flex: 1 1 260px; margin: 0; line-height: 1.4; } .renew-banner .banner-text svg, .op-banner .banner-text svg { vertical-align: -3px; margin-right: 6px; }
+.renew-banner .btn { background: #fff; color: #7f1313; border-color: #fff; min-height: 36px; }
+@media print { .renew-banner { display: none !important; } }

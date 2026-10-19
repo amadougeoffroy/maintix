@@ -64,7 +64,10 @@ export function verifyJekoSignature(rawBody: string, signature: string | undefin
 /* ---------- suspension ---------- */
 export async function suspendOrg(db: Pick<Db, 'query'>, orgId: string, code: string, detail: string | null) {
   const r = await db.query(`update organisations set status='suspended', suspended_at=now(), suspended_reason_code=$2, suspended_reason=$3 where id=$1 and kind='client' returning id`, [orgId, code, detail])
-  return r.rows.length > 0
+  if (!r.rows.length) return false
+  // déconnexion immédiate des comptes de l'entreprise (les opérateurs qui y sont entrés gardent leur session)
+  await db.query(`delete from sessions where org_id = $1 and user_id not in (select user_id from operators)`, [orgId])
+  return true
 }
 export const reactivateOrg = (db: Pick<Db, 'query'>, orgId: string) =>
   db.query(`update organisations set status='active', suspended_at=null, suspended_reason=null, suspended_reason_code=null where id=$1 returning id`, [orgId])

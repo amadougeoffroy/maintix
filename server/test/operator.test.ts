@@ -137,8 +137,10 @@ describe('suspension', () => {
     return { dg, id: (await orgByName('Suspendue SA')).id as string }
   }
   it('bloque l’entreprise avec un motif, mais laisse voir la session et se déconnecter', async () => {
-    const { dg, id } = await setup()
+    const { dg: before, id } = await setup()
     expect((await op.post(`/api/operator/orgs/${id}/suspend`, { reason: 'Facture impayée' })).status).toBe(200)
+    expect((await before.get('/api/auth/session')).status).toBe(401) // déconnecté aussitôt
+    const dg = api(env, await login(env, 'dg@susp.test')) // reconnexion : l'écran de suspension
     const sync = await dg.get('/api/sync/pull?since=0')
     expect(sync.status).toBe(403)
     expect(await sync.json()).toEqual({ error: 'org_suspended', reason: 'Facture impayée' })
@@ -156,9 +158,10 @@ describe('suspension', () => {
     expect((await env.app.request('/api/public/report', json({ elevatorId: 'e1', description: 'x', trapped: false, reporter: '' }))).status).toBe(404)
   })
   it('se réactive, et les données sont intactes', async () => {
-    const { dg, id } = await setup()
+    const { id } = await setup()
     await op.post(`/api/operator/orgs/${id}/suspend`, { reason: 'test' })
     expect((await op.post(`/api/operator/orgs/${id}/reactivate`, {})).status).toBe(200)
+    const dg = api(env, await login(env, 'dg@susp.test'))
     const docs = (await (await dg.get('/api/sync/pull?since=0')).json()).docs as { id: string }[]
     expect(docs.map((d) => d.id)).toEqual(expect.arrayContaining(['s1', 'e1']))
     expect((await orgByName('Suspendue SA')).status).toBe('active')

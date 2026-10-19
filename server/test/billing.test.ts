@@ -53,6 +53,44 @@ describe('motifs de suspension', () => {
   })
 })
 
+describe('suspension : déconnexion immédiate', () => {
+  it('ferme les sessions des comptes de l’entreprise, pas celles des opérateurs ni des autres entreprises', async () => {
+    const a = await createOrg(op, 'A SA', 'dg@a.test', 'DG A')
+    await createOrg(op, 'B SA', 'dg@b.test', 'DG B')
+    const dgA = api(env, await login(env, 'dg@a.test'))
+    const dgB = api(env, await login(env, 'dg@b.test'))
+    expect((await dgA.get('/api/auth/session')).status).toBe(200)
+    await op.post(`/api/operator/orgs/${a}/enter`, {}) // l'opérateur est dans l'entreprise A
+    await op.post(`/api/operator/orgs/${a}/suspend`, { code: 'unpaid' })
+    expect((await dgA.get('/api/auth/session')).status).toBe(401) // déconnecté
+    expect((await dgB.get('/api/auth/session')).status).toBe(200)
+    expect((await op.get('/api/auth/session')).status).toBe(200)
+    // il peut se reconnecter : il retrouve l'écran de suspension
+    const again = api(env, await login(env, 'dg@a.test'))
+    expect(await (await again.get('/api/auth/session')).json()).toMatchObject({ orgStatus: 'suspended', payable: true })
+  })
+  it('la suspension automatique ferme aussi les sessions', async () => {
+    const id = await createOrg(op, 'Essai SA', 'dg@e.test', 'DG')
+    const dg = api(env, await login(env, 'dg@e.test'))
+    await env.db.query(`update organisations set trial_ends_on = current_date - 1 where id = $1`, [id])
+    await runAutoSuspension(env.db)
+    expect((await dg.get('/api/auth/session')).status).toBe(401)
+  })
+})
+
+describe('échéance exposée à l’interface', () => {
+  it('la session indique la fin de l’abonnement, ou de l’essai', async () => {
+    const id = await createOrg(op, 'Cliente SA', 'dg@c.test', 'DG')
+    const dg = api(env, await login(env, 'dg@c.test'))
+    const trial = (await (await dg.get('/api/auth/session')).json())
+    expect(trial.planName).toBe('essai')
+    expect(trial.planEndsOn).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    await env.db.query(`update organisations set plan = 'essentiel', subscription_ends_on = '2030-05-17' where id = $1`, [id])
+    expect(await (await dg.get('/api/auth/session')).json()).toMatchObject({ planName: 'essentiel', planEndsOn: '2030-05-17' })
+    expect((await (await op.get('/api/auth/session')).json()).planEndsOn).toBeNull() // l'entreprise plateforme n'a pas d'échéance
+  })
+})
+
 describe('suspension automatique', () => {
   it('suspend un essai échu et un abonnement échu, pas les autres', async () => {
     const trial = await createOrg(op, 'Essai SA', 'a@a.test', 'AA')

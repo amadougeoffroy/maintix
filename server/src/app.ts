@@ -130,7 +130,7 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
 
   const sessionView = (w: Principal) => ({
     user: { id: w.userId, email: w.email }, org: { id: w.orgId, name: w.orgName }, role: w.role, fullName: w.fullName, techId: w.techId, clientId: w.clientId,
-    operator: w.operator, orgStatus: w.orgStatus, suspendedReason: w.suspendedReason, suspendedReasonCode: w.suspendedReasonCode, suspendedReasonLabel: w.suspendedReasonLabel, payable: w.payable, orgKind: w.orgKind, impersonating: w.impersonating,
+    operator: w.operator, orgStatus: w.orgStatus, suspendedReason: w.suspendedReason, suspendedReasonCode: w.suspendedReasonCode, suspendedReasonLabel: w.suspendedReasonLabel, planEndsOn: w.planEndsOn, planName: w.planName, payable: w.payable, orgKind: w.orgKind, impersonating: w.impersonating,
   })
 
   /** Entreprise « plateforme » : accueil des opérateurs, jamais listée ni facturée. Créée au besoin. */

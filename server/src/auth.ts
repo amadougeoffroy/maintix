@@ -24,6 +24,9 @@ export interface Principal {
   impersonating: boolean
   suspendedReasonCode: string | null
   suspendedReasonLabel: string | null
+  /** date de fin de l'abonnement (ou de l'essai) : AAAA-MM-JJ, null si aucune échéance */
+  planEndsOn: string | null
+  planName: string
   /** un paiement de l'entreprise peut lever la suspension en cours */
   payable: boolean
 }
@@ -68,11 +71,12 @@ export async function principalFromSession(db: Db, token: string): Promise<Princ
   const r = await db.query<{
     user_id: string; email: string; org_id: string; org_name: string; role: Role | null; full_name: string | null; tech_id: string | null; client_id: string | null
     org_status: 'active' | 'suspended'; suspended_reason: string | null; is_operator: boolean; org_kind: 'client' | 'platform'
-    reason_code: string | null; reason_label: string | null; payable: boolean | null
+    reason_code: string | null; reason_label: string | null; payable: boolean | null; plan_ends_on: string | null; plan: string
   }>(
     `select s.user_id, u.email, s.org_id, o.name as org_name, m.role, m.full_name, m.tech_id, m.client_id,
             o.status as org_status, o.suspended_reason, o.kind as org_kind, (op.user_id is not null) as is_operator, o.suspended_reason_code as reason_code,
             (select r.label from suspension_reasons r where r.code = o.suspended_reason_code) as reason_label,
+            to_char(coalesce(o.subscription_ends_on, case when o.plan = 'essai' then o.trial_ends_on end), 'YYYY-MM-DD') as plan_ends_on, o.plan,
             (select r.lifted_by_payment from suspension_reasons r where r.code = o.suspended_reason_code) as payable
        from sessions s
        join users u on u.id = s.user_id
@@ -87,7 +91,7 @@ export async function principalFromSession(db: Db, token: string): Promise<Princ
   const impersonating = !x.role // opérateur sans appartenance à cette entreprise : il agit en administrateur
   return {
     userId: x.user_id, email: x.email, orgId: x.org_id, orgName: x.org_name, role: x.role ?? 'admin', fullName: x.full_name ?? 'Opérateur Maintix',
-    techId: x.tech_id, clientId: x.client_id, orgStatus: x.org_status, suspendedReason: x.suspended_reason, operator: x.is_operator, orgKind: x.org_kind, impersonating, suspendedReasonCode: x.reason_code, suspendedReasonLabel: x.reason_label, payable: !!x.payable,
+    techId: x.tech_id, clientId: x.client_id, orgStatus: x.org_status, suspendedReason: x.suspended_reason, operator: x.is_operator, orgKind: x.org_kind, impersonating, suspendedReasonCode: x.reason_code, suspendedReasonLabel: x.reason_label, planEndsOn: x.org_kind === 'client' ? x.plan_ends_on : null, planName: x.plan, payable: !!x.payable,
   }
 }
 

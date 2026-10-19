@@ -25,6 +25,34 @@ function Main({ className }: { className: string }) {
   return <main id="main" ref={ref} tabIndex={-1} className={className}><Outlet /></main>
 }
 /** Bandeau du mode opérateur : on agit dans une entreprise cliente ; un clic ramène à la console. */
+/** Jours restants avant la date (AAAA-MM-JJ), en jours calendaires locaux ; négatif si dépassée. */
+export function daysUntil(date: string, now = new Date()): number {
+  const [y, m, d] = date.split('-').map(Number)
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.round((Date.UTC(y, m - 1, d) - today) / 86_400_000)
+}
+export const RENEWAL_WARNING_DAYS = 7
+
+/** Bande rouge sur toutes les pages : l'abonnement (ou l'essai) se termine dans 7 jours ou moins. */
+function RenewalBanner({ canRenew }: { canRenew: boolean }) {
+  const s = useData()
+  const nav = useNavigate()
+  const end = s.session.planEndsOn
+  if (!end || s.session.orgKind === 'platform' || s.session.orgStatus === 'suspended') return null
+  const days = daysUntil(end)
+  if (days > RENEWAL_WARNING_DAYS || days < 0) return null
+  const what = s.session.planName === 'essai' ? 'votre période d’essai' : 'votre abonnement'
+  const when = days === 0 ? 'se termine aujourd’hui' : days === 1 ? 'se termine demain' : `se termine dans ${days} jours`
+  return (
+    <div className="renew-banner" role="alert">
+      <p className="banner-text"><TriangleAlert size={18} aria-hidden="true" /><strong>{what.charAt(0).toUpperCase() + what.slice(1)} {when}.</strong> Renouvelez-le avant cette date pour ne pas perdre l’accès.</p>
+      {canRenew
+        ? <button type="button" className="btn sm" onClick={() => nav('/office/settings/abonnement')}>Renouveler maintenant</button>
+        : <span className="small">Contactez l’administrateur de votre entreprise.</span>}
+    </div>
+  )
+}
+
 function useLeaveConsole() {
   const nav = useNavigate()
   return async () => { const r = await leaveToConsole(); if (r.ok) nav('/operator'); else feedback.toast(r.error, 'error') }
@@ -35,7 +63,7 @@ function OperatorBanner() {
   if (!s.session.impersonating) return null
   return (
     <div className="op-banner" role="region" aria-label="Mode opérateur">
-      <span><ShieldCheck size={18} aria-hidden="true" /> Mode opérateur : vous êtes dans <strong>{s.session.orgName}</strong></span>
+      <p className="banner-text"><ShieldCheck size={18} aria-hidden="true" />Mode opérateur : vous êtes dans <strong>{s.session.orgName}</strong></p>
       <button type="button" className="btn sm" onClick={leave}>← Retour à la console</button>
     </div>
   )
@@ -49,6 +77,7 @@ export function TechShell() {
   return (
     <div className="app">
       <SkipLink />
+      <RenewalBanner canRenew={false} />
       <header className="topbar">
         <p className="brandline"><Logo variant="dark" height={22} /><span className="who">{me?.name ?? s.session.fullName ?? 'Technicien'}{s.session.orgName ? <span className="org-chip">{s.session.orgName}</span> : null}</span></p>
         <SyncBadge />
@@ -146,6 +175,7 @@ export function OfficeShell() {
       </aside>
       <div className="app">
         <OperatorBanner />
+        <RenewalBanner canRenew />
         <header className="topbar">
           <p className="brandline"><Logo variant="dark" height={22} /><span className="who"><span className="who-label">Bureau</span>{s.session.orgName ? <span className="org-chip">{s.session.orgName}</span> : null}</span></p>
           <NavLink to="/office/search" className="btn sm ghost" aria-label="Rechercher"><SearchIcon size={18} /></NavLink>

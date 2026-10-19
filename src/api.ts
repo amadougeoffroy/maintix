@@ -27,6 +27,8 @@ export interface SessionInfo {
   suspendedReason?: string | null
   suspendedReasonCode?: string | null
   suspendedReasonLabel?: string | null
+  planEndsOn?: string | null
+  planName?: string
   payable?: boolean
   role: 'admin' | 'bureau' | 'tech' | 'client'
   fullName: string

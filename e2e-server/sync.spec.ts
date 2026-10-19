@@ -295,6 +295,21 @@ test.describe.serial('mode serveur', () => {
     await card.getByRole('button', { name: 'Enregistrer l’offre' }).click()
     await expect(page.locator('.toast-item', { hasText: 'Offre de « Entreprise Cliente SA » enregistrée' })).toBeVisible()
 
+    // à 7 jours de l'échéance : bande rouge sur toutes les pages de l'entreprise, avec bouton vers l'abonnement
+    const in3 = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10)
+    await card.getByRole('button', { name: 'Offre et plafonds' }).click()
+    await card.getByLabel('Échéance de l’abonnement').fill(in3)
+    await card.getByRole('button', { name: 'Enregistrer l’offre' }).click()
+    await dgPage.goto('/#/office')
+    await dgPage.reload()
+    const banner = dgPage.locator('.renew-banner')
+    await expect(banner).toContainText('Votre abonnement se termine dans 3 jours')
+    await dgPage.goto('/#/office/planning')
+    await expect(banner).toBeVisible() // visible sur toutes les pages
+    if (process.env.SHOTS) await dgPage.screenshot({ path: 'docs/screenshots/48-bande-renouvellement.png' })
+    await banner.getByRole('button', { name: 'Renouveler maintenant' }).click()
+    await expect(dgPage.getByRole('heading', { name: 'Abonnement et paiement' })).toBeVisible()
+
     // suspension avec motif
     await card.getByRole('button', { name: 'Suspendre…' }).click()
     await card.getByLabel('Motif de suspension').selectOption({ label: 'Facture impayée' })
@@ -302,16 +317,20 @@ test.describe.serial('mode serveur', () => {
     await card.getByRole('button', { name: 'Suspendre l’entreprise' }).click()
     await expect(card.getByText('Suspendue').first()).toBeVisible()
     await expect(card).toContainText('levée possible par le paiement')
-    await dgPage.reload()
-    await expect(dgPage.getByRole('heading', { name: 'Accès suspendu' })).toBeVisible()
-    await expect(dgPage.getByText('Facture impayée')).toBeVisible()
-    await expect(dgPage.getByText('paiement en ligne n’est pas encore activé')).toBeVisible() // motif payable, mais Jèko pas encore configuré
-    if (process.env.SHOTS) await dgPage.screenshot({ path: 'docs/screenshots/45-acces-suspendu.png' })
+    // les comptes de l'entreprise sont déconnectés aussitôt (au plus tard à la prochaine synchronisation)
+    await expect(dgPage.getByText('Votre session a été fermée')).toBeVisible({ timeout: 35000 })
+    await expect(dgPage.getByRole('heading', { level: 1, name: 'Chaque visite, tracée.' })).toBeVisible()
+    // en se reconnectant, l'administrateur arrive sur l'écran de suspension
+    const dg2 = await freshLogin(browser, 'dg@cliente.test')
+    await expect(dg2.page.getByRole('heading', { name: 'Accès suspendu' })).toBeVisible()
+    await expect(dg2.page.getByText('Facture impayée')).toBeVisible()
+    await expect(dg2.page.getByText('paiement en ligne n’est pas encore activé')).toBeVisible() // motif payable, mais Jèko pas encore configuré
+    if (process.env.SHOTS) await dg2.page.screenshot({ path: 'docs/screenshots/45-acces-suspendu.png' })
     // réactivation
     await card.getByRole('button', { name: 'Réactiver' }).click()
-    await dgPage.goto('/#/office')
-    await dgPage.reload()
-    await expect(dgPage.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible()
+    await dg2.page.reload()
+    await expect(dg2.page.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible()
+    await dg2.ctx.close()
 
     // finances et réglages Jèko de la console
     await page.getByRole('tab', { name: 'Finances' }).click()

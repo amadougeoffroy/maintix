@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { api, bootstrap, invite, makeEnv, type Env } from './helpers'
+import { api, bootstrap, createOrg, invite, login, makeEnv, type Env } from './helpers'
 
 let env: Env
 let admin: ReturnType<typeof api>
@@ -30,5 +30,19 @@ describe('didacticiel', () => {
   })
   it('exige une session', async () => {
     expect((await env.app.request('/api/me/onboarding')).status).toBe(401)
+  })
+  it('un opérateur entré dans une entreprise conserve son propre avancement (masquer « Premiers pas »)', async () => {
+    const orgId = await createOrg(admin, 'Cliente SA', 'dg@c.test', 'Directeur')
+    await admin.post(`/api/operator/orgs/${orgId}/enter`, {})
+    expect(await get(admin)).toEqual({})
+    await admin.post('/api/me/onboarding', { gettingStartedHidden: true })
+    expect(await get(admin)).toEqual({ gettingStartedHidden: true })
+    // l'administrateur de l'entreprise n'est pas affecté
+    const dg = api(env, await login(env, 'dg@c.test'))
+    expect(await get(dg)).toEqual({})
+    // et la persistance survit à une reconnexion
+    await admin.post('/api/operator/leave', {})
+    await admin.post(`/api/operator/orgs/${orgId}/enter`, {})
+    expect(await get(admin)).toEqual({ gettingStartedHidden: true })
   })
 })

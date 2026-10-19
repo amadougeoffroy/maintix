@@ -336,7 +336,8 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
   const ONBOARDING_KEYS = ['welcomeSeen', 'gettingStartedHidden', 'qrDone', 'installDone', 'teamDone'] as const
   app.get('/api/me/onboarding', requireAuth, async (c) => {
     const who = c.get('who')
-    const r = await db.query<{ onboarding: Record<string, boolean> }>('select onboarding from members where user_id=$1 and org_id=$2', [who.userId, who.orgId])
+    const table = who.impersonating ? 'operator_onboarding' : 'members' // un opérateur entré dans une entreprise a son propre avancement
+    const r = await db.query<{ onboarding: Record<string, boolean> }>(`select onboarding from ${table} where user_id=$1 and org_id=$2`, [who.userId, who.orgId])
     return c.json({ onboarding: r.rows[0]?.onboarding ?? {} })
   })
   app.post('/api/me/onboarding', requireAuth, async (c) => {
@@ -344,10 +345,13 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     const shape = Object.fromEntries(ONBOARDING_KEYS.map((k) => [k, z.boolean().optional()]))
     const parsed = z.object(shape).strict().safeParse(await c.req.json().catch(() => null))
     if (!parsed.success) return c.json({ error: 'invalid' }, 400)
-    const r = await db.query<{ onboarding: Record<string, boolean> }>(
-      `update members set onboarding = onboarding || $3::jsonb where user_id=$1 and org_id=$2 returning onboarding`,
-      [who.userId, who.orgId, JSON.stringify(parsed.data)],
-    )
+    const r = who.impersonating
+      ? await db.query<{ onboarding: Record<string, boolean> }>(
+        `insert into operator_onboarding (user_id, org_id, onboarding) values ($1,$2,$3::jsonb) on conflict (user_id, org_id) do update set onboarding = operator_onboarding.onboarding || $3::jsonb returning onboarding`,
+        [who.userId, who.orgId, JSON.stringify(parsed.data)])
+      : await db.query<{ onboarding: Record<string, boolean> }>(
+        `update members set onboarding = onboarding || $3::jsonb where user_id=$1 and org_id=$2 returning onboarding`,
+        [who.userId, who.orgId, JSON.stringify(parsed.data)])
     return c.json({ onboarding: r.rows[0]?.onboarding ?? {} })
   })
 

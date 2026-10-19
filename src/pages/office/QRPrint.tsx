@@ -15,7 +15,7 @@ export default function QRPrint() {
       <div className="qrgrid">
         {s.elevators.map((e) => (
           <div key={e.id} className="qrbox">
-            <div className="qr-brand"><Logo variant="dark" height={20} /></div>
+            <div className="qr-brand"><Logo variant="color" height={20} /></div>
             <QR value={publicUrl(`/signal/${e.id}`)} size={150} />
             <strong>Panne ? Scannez pour signaler</strong>
             <span style={{ fontSize: '.8rem' }}>{e.label} · {byId(s.sites, e.siteId)?.name}</span>

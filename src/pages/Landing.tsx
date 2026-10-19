@@ -4,6 +4,8 @@ import { CalendarClock, FileCheck2, QrCode, Receipt, ShieldCheck, Smartphone, Wi
 import { Logo } from '../brand/Logo'
 import { ElevatorShaft } from '../components/ElevatorShaft'
 import { ThemeToggle } from '../components/ThemeToggle'
+import { runtime } from '../store'
+import { startDemo } from '../demo'
 
 const FEATURES = [
   { icon: Smartphone, title: 'Visites sur mobile', text: 'Check-list guidée par zone, mesures, pièces, photos et signature du client, au doigt, sur le palier.' },
@@ -47,6 +49,14 @@ function FloorPanel() {
   )
 }
 
+/** Accès à la démonstration : lancée explicitement (jamais automatiquement), ou reprise si elle est déjà active. */
+function DemoLink({ dark = false }: { dark?: boolean }) {
+  const style = dark ? { color: '#fbbf24' } : undefined
+  return runtime.explicitDemo
+    ? <Link to="/demo" style={style}>▶ Continuer la démonstration</Link>
+    : <button type="button" className="link-btn" style={style} onClick={startDemo}>▶ Essayer la démonstration, sans compte</button>
+}
+
 /** Page de présentation publique (racine du site). */
 export default function Landing() {
   return (
@@ -67,6 +77,12 @@ export default function Landing() {
         </div>
       </header>
 
+      {runtime.unreachable && (
+        <div className="l-alert" role="alert">
+          <span>Le service est momentanément injoignable. Vérifiez votre connexion puis réessayez.</span>
+          <button type="button" className="btn sm" onClick={() => location.reload()}>Réessayer</button>
+        </div>
+      )}
       <main id="main">
         <section className="l-hero">
           <div className="l-wrap l-hero-in">
@@ -78,6 +94,7 @@ export default function Landing() {
                 <Link className="btn primary" to="/signup">Demander un accès <ArrowRight size={18} aria-hidden="true" /></Link>
                 <Link className="btn" to="/login">Recevoir mon lien de connexion</Link>
               </div>
+              <p className="small"><DemoLink /></p>
               <p className="small muted">Pas de mot de passe : un lien de connexion sécurisé vous est envoyé par e-mail.</p>
             </div>
             <div className="l-mock"><ElevatorShaft /></div>
@@ -123,6 +140,7 @@ export default function Landing() {
                 <Link className="btn primary" to="/signup">Demander un accès</Link>
                 <Link className="btn" to="/login">Recevoir mon lien de connexion</Link>
               </div>
+              <p className="small"><DemoLink dark /></p>
             </div>
           </div>
         </section>

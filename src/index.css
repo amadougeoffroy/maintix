@@ -360,3 +360,10 @@ html { scroll-behavior: smooth; } @media (prefers-reduced-motion: reduce) { html
 .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
 .bars.stacked .bar-col { grid-template-rows: 1fr auto; }
 .bar-stack { align-self: end; width: 100%; max-width: 40px; display: flex; flex-direction: column-reverse; border-radius: 6px 6px 0 0; overflow: hidden; }
+
+.link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--brand); text-decoration: underline; cursor: pointer; }
+.l-alert { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 10px 16px; background: #b91c1c; color: #fff; font-size: .92rem; }
+.l-alert .btn { background: #fff; color: #7f1313; border-color: #fff; min-height: 36px; }
+.demo-banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 8px 16px; background: #fbbf24; color: #1c1203; font-size: .9rem; }
+.demo-banner p { margin: 0; flex: 1 1 240px; } .demo-banner .btn { background: #1c1203; color: #fff; border-color: #1c1203; min-height: 36px; }
+@media print { .demo-banner, .l-alert { display: none !important; } }

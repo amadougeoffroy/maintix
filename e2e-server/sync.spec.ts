@@ -65,6 +65,22 @@ test.describe.serial('mode serveur', () => {
     await expect(page.getByLabel('Nom de l’entreprise')).toBeVisible()
     await expect(page.getByRole('link', { name: 'politique de confidentialité' })).toBeVisible() // consentement explicite sur le formulaire
 
+    // la démonstration est une option de la page d'accueil, jamais le comportement par défaut de la racine
+    await page.goto('/')
+    await expect(page.getByRole('heading', { level: 1, name: 'Chaque visite, tracée.' })).toBeVisible()
+    await expect(page.getByText('Mode démonstration (aucun serveur détecté)')).toHaveCount(0)
+    await page.getByRole('button', { name: /Essayer la démonstration/ }).first().click()
+    await expect(page.getByText(/Mode démonstration : explorez Maintix/)).toBeVisible()
+    await page.getByRole('button', { name: /Responsable/ }).click()
+    await expect(page.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Mode démonstration' })).toContainText('données d’exemple')
+    await page.getByRole('button', { name: 'Quitter la démo' }).click()
+    await expect(page.getByRole('heading', { level: 1, name: 'Chaque visite, tracée.' })).toBeVisible()
+    expect(await page.evaluate(() => localStorage.getItem('maintix-demo'))).toBeNull()
+    await page.goto('/#/login')
+    await expect(page.getByRole('heading', { name: 'Recevoir mon lien de connexion' })).toBeVisible() // le mode serveur n'est pas touché
+    await page.goto('/')
+
     // pages légales, depuis le pied de page
     await page.goto('/')
     for (const [link, title] of [['Mentions légales', 'Mentions légales'], ['Confidentialité', 'Politique de confidentialité'], ['Conditions d’utilisation', 'Conditions d’utilisation']] as const) {

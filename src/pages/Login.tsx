@@ -42,9 +42,17 @@ export default function Login() {
           <h1 className="sr-only">Maintix</h1>
           <p className="muted">Chaque visite, tracée.</p>
         </div>
-        {runtime.server ? <><EmailLogin /><p className="center"><Link to="/">← Retour à l’accueil</Link></p></> : (
+        {runtime.server ? <><EmailLogin /><p className="center"><Link to="/">← Retour à l’accueil</Link></p></> : runtime.unreachable ? (
+          <div className="card stack center" role="alert">
+            <h2>Service injoignable</h2>
+            <p className="muted">Impossible de joindre Maintix pour le moment. Vérifiez votre connexion puis réessayez.</p>
+            <button className="btn primary" onClick={() => location.reload()}>Réessayer</button>
+            <Link to="/">← Retour à l’accueil</Link>
+          </div>
+        ) : (
           <>
-            <p className="muted center">Mode démonstration (aucun serveur détecté) : choisissez un profil.</p>
+            <p className="muted center">{runtime.explicitDemo ? 'Mode démonstration : explorez Maintix avec des données d’exemple, stockées sur cet appareil uniquement. Choisissez un profil.' : 'Mode démonstration (aucun serveur détecté) : choisissez un profil.'}</p>
+            {runtime.explicitDemo && <p className="center"><Link to="/">← Retour à l’accueil</Link></p>}
             <section className="stack">
               <h2>Techniciens</h2>
               {s.techs.filter((t) => t.role === 'tech').map((t) => (

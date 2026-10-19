@@ -11,7 +11,8 @@ import type {
 } from './types'
 
 /** `server` : l'API répond (vraie base, comptes, synchro). Sinon mode local de démonstration. */
-export const runtime = { server: false }
+/** server : API joignable et utilisée ; demo : mode démonstration (données locales) ; explicitDemo : choisi par l'utilisateur ; unreachable : serveur attendu mais injoignable */
+export const runtime = { server: false, demo: false, explicitDemo: false, unreachable: false }
 const storeKey = () => (runtime.server ? 'cabine-state-server-v1' : 'cabine-state-v2')
 let state: State = seed()
 

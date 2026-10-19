@@ -5,6 +5,8 @@ import { Logo } from '../brand/Logo'
 import { byId, useData } from '../store'
 import { feedback } from '../feedback'
 import { leaveToConsole, signOut } from '../session'
+import { runtime } from '../store'
+import { leaveDemo } from '../demo'
 import { SyncBadge } from './SyncBadge'
 import { ThemeToggle } from './ThemeToggle'
 import { OfflineBanner } from './ui'
@@ -54,6 +56,17 @@ function RenewalBanner({ canRenew }: { canRenew: boolean }) {
   )
 }
 
+/** Rappel du mode démonstration (choisi depuis le site) : données d'exemple, locales à l'appareil. */
+function DemoBanner() {
+  if (!runtime.explicitDemo) return null
+  return (
+    <div className="demo-banner" role="region" aria-label="Mode démonstration">
+      <p><strong>Mode démonstration</strong> : données d’exemple, stockées sur cet appareil uniquement.</p>
+      <button type="button" className="btn sm" onClick={leaveDemo}>Quitter la démo</button>
+    </div>
+  )
+}
+
 function useLeaveConsole() {
   const nav = useNavigate()
   return async () => { const r = await leaveToConsole(); if (r.ok) nav('/operator'); else feedback.toast(r.error, 'error') }
@@ -78,6 +91,7 @@ export function TechShell() {
   return (
     <div className="app">
       <SkipLink />
+      <DemoBanner />
       <RenewalBanner canRenew={false} />
       <header className="topbar">
         <p className="brandline"><Logo variant="dark" height={22} /><span className="who">{me?.name ?? s.session.fullName ?? 'Technicien'}{s.session.orgName ? <span className="org-chip">{s.session.orgName}</span> : null}</span></p>
@@ -176,6 +190,7 @@ export function OfficeShell() {
         <button className="btn sm ghost" style={s.session.impersonating ? undefined : { marginTop: 'auto' }} onClick={async () => { if (await signOut()) nav('/') }}>Quitter</button>
       </aside>
       <div className="app">
+        <DemoBanner />
         <OperatorBanner />
         <RenewalBanner canRenew />
         <header className="topbar">
@@ -242,6 +257,7 @@ export function ClientShell() {
   return (
     <div className="app">
       <SkipLink />
+      <DemoBanner />
       <header className="topbar">
         <p className="brandline"><Logo variant="dark" height={22} /><span className="who">{c?.name ?? 'Portail client'}</span></p>
         <SyncBadge />

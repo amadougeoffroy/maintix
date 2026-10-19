@@ -7,6 +7,7 @@ import Suspended from './pages/Suspended'
 import { FeedbackHost } from './components/FeedbackHost'
 import Login from './pages/Login'
 import Landing from './pages/Landing'
+import DemoEntry from './pages/DemoEntry'
 import LegalPage from './pages/Legal'
 import BillingReturn from './pages/BillingReturn'
 import Auth from './pages/Auth'
@@ -44,13 +45,16 @@ export default function App() {
   const { pathname } = useLocation()
   const suspended = session.orgStatus === 'suspended' && (session.role || session.clientId)
   const inPlatform = !!session.operator && session.orgKind === 'platform'
+  // page de présentation à la racine : sauf en développement local sans serveur (démo automatique), où le choix du profil reste direct
+  const showLanding = runtime.server || runtime.unreachable || runtime.explicitDemo
   const home = inPlatform ? '/operator' : session.role === 'tech' ? '/tech' : session.role === 'bureau' ? '/office' : session.clientId ? '/client' : null
   return (
     <>
     <FeedbackHost />
     {suspended && !pathname.startsWith('/operator') && !pathname.startsWith('/billing') ? <Suspended /> : (
     <Routes>
-      <Route path="/" element={home ? <Navigate to={home} replace /> : runtime.server ? <Landing /> : <Login />} />
+      <Route path="/" element={home ? <Navigate to={home} replace /> : showLanding ? <Landing /> : <Login />} />
+      <Route path="/demo" element={home ? <Navigate to={home} replace /> : runtime.demo ? <Login /> : <DemoEntry />} />
       <Route path="/login" element={home ? <Navigate to={home} replace /> : <Login />} />
       <Route path="/auth" element={<Auth />} />
       <Route path="/setup" element={<Setup />} />

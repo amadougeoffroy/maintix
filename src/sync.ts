@@ -79,7 +79,7 @@ async function flush() {
       else if (!r.ok && r.doc) rejected.push({ collection: r.collection, id: r.id, data: r.doc.data, deleted: r.doc.deleted, seq: r.doc.seq })
       if (!r.ok) {
         setStatus({ lastError: `Modification refusée (${r.reason ?? 'inconnue'}) : ${r.collection}` })
-        feedback.toast(r.reason?.startsWith('plan_limit') ? 'Ajout refusé : la limite de votre offre est atteinte. Passez à une offre supérieure dans Réglages → Abonnement.' : 'Une modification a été refusée par le serveur ; la version du serveur a été restaurée.', 'error')
+        feedback.toast(r.reason === 'contract_needs_elevator' ? 'Contrat refusé : il doit couvrir au moins un appareil.' : r.reason?.startsWith('plan_limit') ? 'Ajout refusé : la limite de votre offre est atteinte. Passez à une offre supérieure dans Réglages → Abonnement.' : 'Une modification a été refusée par le serveur ; la version du serveur a été restaurée.', 'error')
       }
     })
     if (rejected.length) applyRemoteDocs(rejected) // la version serveur fait foi

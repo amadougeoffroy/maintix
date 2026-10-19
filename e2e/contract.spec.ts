@@ -1,0 +1,32 @@
+import { expect, test } from '@playwright/test'
+
+test('création d’un contrat : appareils regroupés par site, sélection rapide, au moins un appareil requis', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/')
+  await page.getByRole('button', { name: /Responsable/ }).click()
+  // un client avec deux appareils sur un même site
+  await page.goto('/#/office/import')
+  await page.getByLabel('Données à importer').fill('Client;Site;Appareil;Marque;N° série;Année\nClinique Test;Bâtiment Nord;Ascenseur gauche;Kone;K-1;2015\nClinique Test;Bâtiment Nord;Ascenseur droite;Otis;O-2;2018')
+  await page.getByRole('button', { name: /Importer 2 appareil/ }).click()
+  await page.goto('/#/office/clients')
+  const card = page.locator('section', { hasText: 'Clinique Test' }).first()
+  await card.getByRole('button', { name: '+ Contrat' }).click()
+  const form = page.locator('form', { hasText: 'Appareils couverts' })
+  await expect(form.getByText('0 sélectionné(s) sur 2')).toBeVisible()
+  await expect(form.getByRole('button', { name: 'Enregistrer' })).toBeDisabled()
+  await expect(form.getByText('Sélectionnez au moins un appareil.')).toBeVisible()
+  await expect(form.locator('.el-site')).toHaveCount(1) // regroupés par site
+  await expect(form.locator('.el-site')).toContainText('Bâtiment Nord')
+  await form.locator('.el-tile').first().click()
+  await expect(form.locator('.el-tile.on')).toHaveCount(1)
+  await expect(form.getByRole('button', { name: 'Enregistrer' })).toBeEnabled()
+  await expect(form.getByText('1 sélectionné(s) sur 2')).toBeVisible()
+  await form.getByRole('button', { name: 'Tout sélectionner' }).click()
+  await expect(form.getByText('2 sélectionné(s) sur 2')).toBeVisible()
+  await form.getByRole('button', { name: 'Tout désélectionner' }).click()
+  await expect(form.getByText('0 sélectionné(s) sur 2')).toBeVisible()
+  await form.getByRole('button', { name: 'Tout sélectionner' }).click()
+  await page.screenshot({ path: 'docs/screenshots/50-contrat-appareils.png' }).catch(() => {})
+  await form.getByRole('button', { name: 'Enregistrer' }).click()
+  await expect(page.locator('.toast-item', { hasText: 'Contrat créé' })).toBeVisible()
+})

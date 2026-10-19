@@ -91,6 +91,10 @@ test('CRUD client/site/contrat et dossier de contrôle technique', async ({ page
   await page.getByRole('button', { name: 'Enregistrer' }).click()
   await expect(page.getByRole('link', { name: 'Copro Test' })).toBeVisible()
   await expect(page.locator('.toast-item')).toContainText('Copro Test')
+  // un contrat ne peut pas être créé pour un client sans appareil
+  await page.locator('section', { hasText: 'Copro Test' }).getByRole('button', { name: '+ Contrat' }).click()
+  await expect(page.getByRole('dialog').getByRole('heading', { name: 'Aucun appareil pour ce client' })).toBeVisible()
+  await page.getByRole('dialog').getByRole('button', { name: 'Fermer' }).click()
   // un client avec sites ne peut pas être supprimé
   await page.getByRole('button', { name: 'Supprimer' }).first().click()
   await expect(page.getByRole('dialog')).toContainText('encore des sites')

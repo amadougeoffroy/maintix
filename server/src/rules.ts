@@ -45,6 +45,8 @@ export function checkInvoiceIntegrity(existing: Doc | null, incoming: Doc): Verd
 
 /** Droits d'écriture par rôle. `incoming === null` signifie suppression. */
 export function checkWrite(who: Principal, collection: Collection, existing: Doc | null, incoming: Doc | null): Verdict {
+  // un nouveau contrat couvre au moins un appareil
+  if (collection === 'contracts' && incoming && !existing && !(Array.isArray(incoming.elevatorIds) && incoming.elevatorIds.length > 0)) return no('contract_needs_elevator')
   if (collection === 'invoices') {
     if (existing && existing.status !== 'brouillon' && incoming === null) return no('immutable')
     if (incoming) {

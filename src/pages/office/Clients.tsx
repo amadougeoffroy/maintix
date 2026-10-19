@@ -76,7 +76,11 @@ export default function Clients() {
                   <div className="row"><button className="btn sm" onClick={() => setContract(k)}>Modifier</button><button className="btn sm" onClick={async () => { if (await feedback.confirm({ tone: 'danger', title: 'Supprimer ce contrat ?', body: `Le contrat de ${c.name} (${fcfa(k.priceMonthly)} par mois) sera supprimé. Pour garder l’historique, préférez « Résilier » dans Contrats.`, confirmLabel: 'Supprimer le contrat', cancelLabel: 'Garder' })) { actions.deleteContract(k.id); feedback.toast('Contrat supprimé.') } }}>Supprimer</button></div>
                 </div>
               ))}
-              <button className="btn sm" onClick={() => setContract({ id: uid('k'), clientId: c.id, elevatorIds: [], periodicityMonths: 1, priceMonthly: 0, start: today(), indexation: 3 })}>+ Contrat</button>
+              <button className="btn sm" onClick={() => {
+                const hasElevator = s.elevators.some((e) => s.sites.some((x) => x.id === e.siteId && x.clientId === c.id))
+                if (!hasElevator) { feedback.dialog({ tone: 'error', title: 'Aucun appareil pour ce client', body: `« ${c.name} » n’a encore aucun appareil : un contrat doit couvrir au moins un ascenseur. Ajoutez d’abord un site et un appareil, puis créez le contrat.`, actions: [{ label: 'Ajouter un appareil', primary: true, to: '/office/parc' }, { label: 'Fermer' }] }); return }
+                setContract({ id: uid('k'), clientId: c.id, elevatorIds: [], periodicityMonths: 1, priceMonthly: 0, start: today(), indexation: 3 })
+              }}>+ Contrat</button>
             </div>
           </section>
         )
@@ -95,11 +99,35 @@ function ContractForm({ contract, onChange }: { contract: Contract; onChange: (c
     <form className="card stack" onSubmit={(e) => { e.preventDefault(); const isNew = !s.contracts.some((k) => k.id === contract.id); actions.upsertContract(contract); onChange(null); feedback.toast(`Contrat ${isNew ? 'créé' : 'enregistré'} : ${fcfa(contract.priceMonthly)} par mois, ${contract.elevatorIds.length} appareil(s).`) }}>
       <h2>Contrat – {byId(s.clients, contract.clientId)?.name}</h2>
       <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
-        <legend style={{ fontWeight: 600 }}>Appareils couverts</legend>
-        {els.length === 0 && <p className="muted small">Ajoutez d’abord des appareils à ce client.</p>}
-        {els.map((e) => (
-          <label key={e.id} className="row"><input type="checkbox" style={{ width: 24, minHeight: 24 }} disabled={taken(e.id)} checked={contract.elevatorIds.includes(e.id)} onChange={() => toggle(e.id)} />{e.label} <span className="muted small">{taken(e.id) ? '(déjà sous un autre contrat)' : byId(s.sites, e.siteId)?.name}</span></label>
-        ))}
+        <legend className="row between wrap" style={{ fontWeight: 700, width: '100%', padding: 0 }}>
+          <span>Appareils couverts</span>
+          <span className={`badge ${contract.elevatorIds.length ? 'ok' : ''}`} role="status">{contract.elevatorIds.length} sélectionné(s) sur {els.length}</span>
+        </legend>
+        {els.length === 0 && <p className="muted small">Ce client n’a pas encore d’appareil : ajoutez-en un avant de créer un contrat.</p>}
+        {sites.map((site) => {
+          const list = els.filter((e) => e.siteId === site.id)
+          if (!list.length) return null
+          const free = list.filter((e) => !taken(e.id))
+          const allOn = free.length > 0 && free.every((e) => contract.elevatorIds.includes(e.id))
+          const setAll = (on: boolean) => onChange({ ...contract, elevatorIds: on ? [...new Set([...contract.elevatorIds, ...free.map((e) => e.id)])] : contract.elevatorIds.filter((id) => !free.some((e) => e.id === id)) })
+          return (
+            <div key={site.id} className="el-site">
+              <div className="row between wrap">
+                <div><strong>{site.name}</strong><div className="small muted">{site.address}</div></div>
+                {free.length > 1 && <button type="button" className="btn sm" onClick={() => setAll(!allOn)}>{allOn ? 'Tout désélectionner' : 'Tout sélectionner'}</button>}
+              </div>
+              <div className="el-tiles">
+                {list.map((e) => (
+                  <label key={e.id} className={`el-tile ${contract.elevatorIds.includes(e.id) ? 'on' : ''} ${taken(e.id) ? 'off' : ''}`}>
+                    <input type="checkbox" className="sr-only" disabled={taken(e.id)} checked={contract.elevatorIds.includes(e.id)} onChange={() => toggle(e.id)} />
+                    <span className="el-check" aria-hidden="true">{contract.elevatorIds.includes(e.id) ? '✓' : ''}</span>
+                    <span className="el-body"><strong>{e.label}</strong><span className="small muted">{[e.brand, e.model].filter(Boolean).join(' ') || 'Appareil'}{e.serial ? ` · n° ${e.serial}` : ''}</span>{taken(e.id) && <span className="small" style={{ color: 'var(--warn)' }}>Déjà sous un autre contrat</span>}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )
+        })}
       </fieldset>
       <div className="grid2">
         <label className="field">Périodicité (mois)<input type="number" min={1} max={12} value={contract.periodicityMonths} onChange={(e) => onChange({ ...contract, periodicityMonths: +e.target.value || 1 })} /></label>
@@ -110,7 +138,7 @@ function ContractForm({ contract, onChange }: { contract: Contract; onChange: (c
         <label className="field">Préavis de résiliation (mois)<input type="number" min={0} max={12} value={contract.noticeMonths ?? 3} onChange={(e) => onChange({ ...contract, noticeMonths: +e.target.value || 0 })} /></label>
         <label className="row" style={{ alignSelf: 'end', minHeight: 48 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={contract.autoRenew ?? true} onChange={(e) => onChange({ ...contract, autoRenew: e.target.checked })} /> Reconduction tacite</label>
       </div>
-      <div className="row"><button className="btn primary">Enregistrer</button><button type="button" className="btn" onClick={() => onChange(null)}>Annuler</button></div>
+      <div className="row wrap"><button className="btn primary" disabled={contract.elevatorIds.length === 0}>Enregistrer</button><button type="button" className="btn" onClick={() => onChange(null)}>Annuler</button>{contract.elevatorIds.length === 0 && <span className="small muted">Sélectionnez au moins un appareil.</span>}</div>
     </form>
   )
 }

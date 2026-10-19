@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { ChevronDown, ShieldCheck, Search as SearchIcon, Building2, History, Receipt, CalendarDays, Download, Euro, FileText, LayoutDashboard, Menu, PhoneCall, QrCode, ScanLine, Settings, Siren, TriangleAlert, User, Users, type LucideIcon } from 'lucide-react'
+import { ChevronDown, ShieldCheck, Search as SearchIcon, Building2, History, Receipt, CalendarDays, Download, Calculator, FileText, LayoutDashboard, Menu, PhoneCall, QrCode, ScanLine, Settings, Siren, TriangleAlert, User, Users, type LucideIcon } from 'lucide-react'
 import { Logo } from '../brand/Logo'
 import { byId, useData } from '../store'
 import { feedback } from '../feedback'
@@ -118,7 +118,7 @@ const OFFICE_GROUPS: readonly NavGroup[] = [
   ] },
   { key: 'commercial', label: 'Commercial', links: [
     ['/office/contracts', FileText, 'Contrats', false],
-    ['/office/quotes', Euro, 'Devis', false],
+    ['/office/quotes', Calculator, 'Devis', false],
     ['/office/invoices', Receipt, 'Factures', false],
   ] },
   { key: 'admin', label: 'Administration', links: [

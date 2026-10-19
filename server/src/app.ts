@@ -713,6 +713,25 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     return c.json({ status: org.status, offer: org.offer, usage: org.usage, flags: org.flags, estimate: org.estimate })
   })
 
+  /** Vide les données métier de l'entreprise (clients, appareils, missions, factures… et techniciens sans compte) : données de démonstration, ou remise à zéro.
+   *  Les comptes, les réglages et les techniciens liés à un compte sont conservés. Les autres appareils reçoivent les suppressions à la prochaine synchronisation. */
+  app.post('/api/org/clear-data', requireAuth, requireRole('admin'), async (c) => {
+    const who = c.get('who')
+    const parsed = z.object({ confirm: z.literal('SUPPRIMER') }).safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) return c.json({ error: 'confirm_required' }, 400)
+    const cleared = await db.tx(async (t) => {
+      const cols = COLLECTIONS.filter((x) => x !== 'settings' && x !== 'techs')
+      const a = await t.query(`update docs set data = null, deleted = true, seq = nextval('docs_seq'), updated_at = now(), updated_by = $2 where org_id = $1 and collection = any($3::text[]) and not deleted returning id`, [who.orgId, who.userId, cols])
+      const b = await t.query(`update docs set data = null, deleted = true, seq = nextval('docs_seq'), updated_at = now(), updated_by = $2 where org_id = $1 and collection = 'techs' and not deleted and id not in (select tech_id from members where org_id = $1 and tech_id is not null) returning id`, [who.orgId, who.userId])
+      await t.query('delete from files where org_id = $1', [who.orgId])
+      await t.query('delete from invoice_counters where org_id = $1', [who.orgId])
+      await t.query('delete from alerts where org_id = $1', [who.orgId])
+      await audit(who.orgId, who.userId, 'org.data_cleared', undefined, undefined, { documents: a.rows.length + b.rows.length }, t)
+      return a.rows.length + b.rows.length
+    })
+    return c.json({ ok: true, documents: cleared, ...sessionView(who) })
+  })
+
   /* ---------- abonnement : offre, paiement en ligne (Jèko), webhook ---------- */
   const jekoCreds = async (): Promise<JekoCreds | null> => {
     const st = await getSettings(db, config.secretsKey)

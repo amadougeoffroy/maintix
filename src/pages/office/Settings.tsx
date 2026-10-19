@@ -5,6 +5,7 @@ import { api, ApiError, type Member } from '../../api'
 import { actions, certStatus, runtime, useData } from '../../store'
 import type { OrgSettings } from '../../types'
 import { guardAdd, limitDialog } from '../../limits'
+import { clearOrgData } from '../../session'
 import { PayPanel } from '../../components/PayPanel'
 import { PlanCard } from '../../components/PlanCard'
 import { feedback } from '../../feedback'
@@ -150,6 +151,19 @@ function Data() {
         <div className="card stack">
           <p className="small muted">Votre entreprise est vide. Pour essayer Maintix sans saisir vos données, vous pouvez charger des clients, appareils et missions d’exemple (à ne pas utiliser pour une entreprise réelle).</p>
           <div><button className="btn" onClick={() => { actions.loadDemo(); feedback.toast('Données de démonstration chargées.') }}>Charger des données de démonstration</button></div>
+        </div>
+      )}
+      {runtime.server && s.session.isAdmin && (s.elevators.length > 0 || s.clients.length > 0) && (
+        <div className="card stack">
+          <h3>Vider les données de l’entreprise</h3>
+          <p className="small muted">Supprime tous les clients, sites, appareils, missions, rapports, devis, contrats et factures (par exemple après avoir essayé avec les données de démonstration). Les comptes, l’équipe liée à un compte et les réglages sont conservés ; la numérotation des factures repart de zéro. <strong>Irréversible.</strong></p>
+          <div><button className="btn danger" onClick={async () => {
+            const typed = await feedback.prompt({ tone: 'danger', title: 'Vider toutes les données ?', body: 'Clients, appareils, missions, rapports, factures et photos seront supprimés définitivement sur tous les appareils.', label: 'Tapez SUPPRIMER pour confirmer', confirmLabel: 'Tout supprimer', multiline: false })
+            if (typed === null) return
+            if (typed.trim() !== 'SUPPRIMER') { feedback.toast('Confirmation incorrecte : rien n’a été supprimé.', 'error'); return }
+            const r = await clearOrgData()
+            feedback.toast(r.ok ? 'Les données de l’entreprise ont été supprimées.' : r.error, r.ok ? 'info' : 'error')
+          }}>Vider les données</button></div>
         </div>
       )}
       <p className="muted small">{runtime.server ? 'Les données sont synchronisées avec le serveur et disponibles hors ligne sur cet appareil.' : 'Mode démonstration : données stockées sur cet appareil uniquement.'}</p>

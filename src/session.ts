@@ -63,6 +63,8 @@ async function moveSession(call: () => Promise<SessionInfo>): Promise<{ ok: true
     return { ok: false, error: 'Changement impossible (hors ligne ?).' }
   }
 }
+/** Vide les données métier de l'entreprise (confirmation déjà obtenue), puis recharge un état local vide. */
+export const clearOrgData = () => moveSession(async () => { await api.clearData(); return api.session() })
 /** Opérateur : entre dans une entreprise cliente (en administrateur). */
 export const enterOrg = (orgId: string) => moveSession(() => api.opEnter(orgId))
 /** Opérateur : retourne à la console. */

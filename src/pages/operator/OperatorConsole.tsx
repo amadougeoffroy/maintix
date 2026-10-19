@@ -23,6 +23,8 @@ function OrgCard({ org, plans, onChange }: { org: OperatorOrg; plans: PlanPreset
   const nav = useNavigate()
   const [edit, setEdit] = useState(false)
   const [suspend, setSuspend] = useState(false)
+  const [del, setDel] = useState(false)
+  const [delName, setDelName] = useState('')
   const [reasons, setReasons] = useState<SuspensionReason[]>([])
   const [sus, setSus] = useState({ code: 'unpaid', detail: '' })
   useEffect(() => { if (suspend && !reasons.length) api.opReasons().then((r) => setReasons(r.reasons)).catch(() => {}) }, [suspend, reasons.length])
@@ -56,7 +58,20 @@ function OrgCard({ org, plans, onChange }: { org: OperatorOrg; plans: PlanPreset
         {suspended
           ? <button className="btn sm primary" onClick={async () => { try { await api.opReactivate(org.id); feedback.toast(`« ${org.name} » est réactivée.`); onChange() } catch { feedback.toast('Réactivation impossible.', 'error') } }}>Réactiver</button>
           : <button className="btn sm" aria-expanded={suspend} onClick={() => setSuspend(!suspend)}>Suspendre…</button>}
+        <button className="btn sm danger-ghost" aria-expanded={del} onClick={() => { setDel(!del); setDelName('') }}>Supprimer…</button>
       </div>
+      {del && (
+        <form className="card alert stack" onSubmit={async (e) => {
+          e.preventDefault()
+          try { const r = await api.opDeleteOrg(org.id, delName); feedback.toast(`« ${org.name} » et ses données ont été supprimées (${r.users} compte(s)).`, 'info'); setDel(false); onChange() }
+          catch (x) { feedback.toast(x instanceof ApiError && x.code === 'confirm_mismatch' ? 'Le nom saisi ne correspond pas exactement.' : 'Suppression impossible.', 'error') }
+        }}>
+          <h3>Supprimer définitivement « {org.name} » ?</h3>
+          <p className="small">Seront effacés pour toujours : les comptes de l’entreprise, ses clients, appareils, missions, rapports, factures, photos, signatures, ses paiements enregistrés (le total encaissé diminuera) et son journal. <strong>Cette action est irréversible.</strong> Pour la conserver sans accès, utilisez plutôt la suspension.</p>
+          <label className="field">Retapez le nom exact de l’entreprise pour confirmer<input autoComplete="off" value={delName} onChange={(e) => setDelName(e.target.value)} placeholder={org.name} /></label>
+          <div className="row"><button className="btn danger" disabled={delName.trim() !== org.name}>Supprimer définitivement</button><button type="button" className="btn" onClick={() => setDel(false)}>Annuler</button></div>
+        </form>
+      )}
       {suspend && !suspended && (
         <form className="card stack" onSubmit={async (e) => {
           e.preventDefault()

@@ -404,6 +404,20 @@ test.describe.serial('mode serveur', () => {
     const awaPage = await awa.newPage()
     await awaPage.goto(await waitLink('awa@diallo.test'))
     await expect(awaPage.getByRole('dialog').getByRole('heading', { name: /Bienvenue Awa/ })).toBeVisible()
+    // suppression définitive d'une entreprise : le nom exact est retapé pour confirmer
+    await page.reload()
+    const diallo = page.locator('article', { hasText: 'Ascenseurs Diallo' })
+    await diallo.getByRole('button', { name: 'Supprimer…' }).click()
+    const confirmBtn = diallo.getByRole('button', { name: 'Supprimer définitivement' })
+    await expect(confirmBtn).toBeDisabled()
+    await diallo.getByLabel(/Retapez le nom exact/).fill('Ascenseurs Dialo')
+    await expect(confirmBtn).toBeDisabled()
+    await diallo.getByLabel(/Retapez le nom exact/).fill('Ascenseurs Diallo')
+    await confirmBtn.click()
+    await expect(page.locator('.toast-item', { hasText: 'et ses données ont été supprimées' })).toBeVisible()
+    await expect(page.locator('article', { hasText: 'Ascenseurs Diallo' })).toHaveCount(0)
+    await awaPage.reload()
+    await expect(awaPage.getByRole('heading', { level: 1, name: 'Chaque visite, tracée.' })).toBeVisible() // son compte n'existe plus
     await Promise.all([dg.close(), anon.close(), awa.close(), ada.ctx.close()])
   })
 
@@ -471,6 +485,16 @@ test.describe.serial('mode serveur', () => {
     await page.getByRole('button', { name: 'Afficher les premiers pas' }).click()
     await page.goto('/#/office')
     await expect(page.getByRole('heading', { name: 'Premiers pas' })).toBeVisible()
+    // données de démonstration : chargées, puis vidées
+    await page.goto('/#/office/settings/aide')
+    await page.getByRole('button', { name: /Charger des données de démonstration/ }).click()
+    await synced(page)
+    await expect(page.getByRole('button', { name: 'Vider les données' })).toBeVisible()
+    await page.getByRole('button', { name: 'Vider les données' }).click()
+    await page.getByRole('dialog').getByLabel(/Tapez SUPPRIMER/).fill('SUPPRIMER')
+    await page.getByRole('dialog').getByRole('button', { name: 'Tout supprimer' }).click()
+    await expect(page.locator('.toast-item', { hasText: 'données de l’entreprise ont été supprimées' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Charger des données de démonstration/ })).toBeVisible() // l'entreprise est vide à nouveau
     await tutoCtx.close()
   })
 })

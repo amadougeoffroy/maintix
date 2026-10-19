@@ -183,6 +183,27 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     return c.json({ ok: true, org: (await loadOrgs(db, pid(c)))[0] })
   })
 
+  /* ---------- suppression définitive d'une entreprise et de toutes ses données ---------- */
+  app.delete('/api/operator/orgs/:id', ...op, async (c) => {
+    const who = c.get('who')
+    const parsed = z.object({ confirmName: z.string() }).safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) return c.json({ error: 'invalid' }, 400)
+    const org = (await db.query<{ name: string }>(`select name from organisations where id = $1 and kind = 'client'`, [pid(c)])).rows[0]
+    if (!org) return c.json({ error: 'not_found' }, 404)
+    if (parsed.data.confirmName.trim() !== org.name) return c.json({ error: 'confirm_mismatch' }, 400) // le nom exact est retapé pour confirmer
+    const removed = await db.tx(async (t) => {
+      const members = (await t.query<{ user_id: string }>('select user_id from members where org_id = $1', [pid(c)])).rows.map((r) => r.user_id)
+      const counts = (await t.query<{ docs: number; files: number }>(`select (select count(*)::int from docs where org_id = $1) as docs, (select count(*)::int from files where org_id = $1) as files`, [pid(c)])).rows[0]
+      await t.query('delete from audit_log where org_id = $1', [pid(c)])
+      await t.query('delete from organisations where id = $1', [pid(c)]) // supprime en cascade membres, documents, fichiers, paiements, sessions, etc.
+      // les comptes qui n'appartiennent plus à aucune entreprise (et ne sont pas opérateurs) disparaissent aussi
+      const gone = members.length ? (await t.query<{ id: string }>(`delete from users u where u.id = any($1::uuid[]) and not exists (select 1 from members m where m.user_id = u.id) and not exists (select 1 from operators o where o.user_id = u.id) returning u.id`, [members])).rows.length : 0
+      return { members: members.length, users: gone, ...counts }
+    })
+    await audit(NIL, who.userId, 'operator.org.delete', undefined, pid(c), { name: org.name, ...removed })
+    return c.json({ ok: true, ...removed })
+  })
+
   /* ---------- suspension (motif listé en base ; un paiement ne lève que certains motifs) ---------- */
   app.get('/api/operator/suspension-reasons', ...op, async (c) =>
     c.json({ reasons: (await db.query(`select code, label, lifted_by_payment as "liftedByPayment", automatic from suspension_reasons order by sort`)).rows }))

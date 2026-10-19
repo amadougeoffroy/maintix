@@ -332,3 +332,5 @@ html { scroll-behavior: smooth; } @media (prefers-reduced-motion: reduce) { html
 .legal-body p, .legal-body li { line-height: 1.65; color: var(--text); }
 .legal-body ul { padding-left: 20px; }
 .legal-nav { display: flex; gap: 8px 20px; flex-wrap: wrap; margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--line); font-weight: 600; }
+
+.btn.danger-ghost { color: var(--bad); border-color: var(--bad); background: transparent; }

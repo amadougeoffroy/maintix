@@ -458,17 +458,17 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
         }),
       }).catch(() => {})
       const ops = (await db.query<{ email: string }>('select u.email from operators o join users u on u.id = o.user_id')).rows.map((r) => r.email)
-      const targets = [...new Set([...ops, ...config.operatorEmails])]
-      if (targets.length) await mailer.send({
-        to: targets,
-        subject: `Nouvelle demande d'accès : ${company}`,
-        ...emailParts({
-          title: 'Nouvelle demande d\'accès',
-          paragraphs: [`${name} demande un accès à Maintix pour « ${company} ».`, ...(message ? [`Message : ${message}`] : [])],
-          facts: [['Entreprise', company], ['Contact', name], ['E-mail', email], ...(phone ? [['Téléphone', phone] as [string, string]] : [])],
-          button: { label: 'Ouvrir la console opérateur', url: `${config.appUrl}/#/operator` },
-        }),
-      }).catch(() => {})
+      const targets = [...new Set([...ops, ...config.operatorEmails].map((e) => e.toLowerCase()))]
+      const content = emailParts({
+        preheader: `${name} demande un accès pour « ${company} ».`,
+        title: 'Nouvelle demande d\'accès',
+        paragraphs: [`${name} demande un accès à Maintix pour « ${company} ».`, ...(message ? [`Message : ${message}`] : [])],
+        facts: [['Entreprise', company], ['Contact', name], ['E-mail', email], ...(phone ? [['Téléphone', phone] as [string, string]] : [])],
+        button: { label: 'Étudier la demande', url: `${config.appUrl}/#/operator` },
+        notes: ['Approuvez ou refusez la demande depuis la console opérateur, onglet Demandes.'],
+      })
+      // un e-mail par opérateur : les adresses ne sont pas exposées entre elles, et l'échec d'un envoi n'empêche pas les autres
+      for (const to of targets) await mailer.send({ to, subject: `Nouvelle demande d'accès : ${company}`, ...content }).catch(() => {})
     }
     return c.json({ ok: true }) // même réponse que la demande soit nouvelle, en double ou ignorée
   })

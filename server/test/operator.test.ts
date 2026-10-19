@@ -187,10 +187,11 @@ describe('inscription en libre-service', () => {
     expect(res.status).toBe(200)
     const sent = env.mailer.sent.slice(before)
     expect(sent.find((m) => m.to === 'awa@diallo.test')!.subject).toContain('bien reçue')
-    const notif = sent.find((m) => Array.isArray(m.to))!
-    expect(notif.to).toContain('amadou@sodebat.test')
-    expect(notif.subject).toBe('Nouvelle demande d\'accès : Ascenseurs Diallo')
-    expect(notif.text).toContain('#/operator')
+    const notifs = sent.filter((m) => m.subject === 'Nouvelle demande d\'accès : Ascenseurs Diallo')
+    expect(notifs.map((m) => m.to)).toContain('amadou@sodebat.test') // un e-mail par opérateur, adresses non partagées
+    expect(notifs.every((m) => typeof m.to === 'string')).toBe(true)
+    expect(notifs[0].text).toContain('#/operator')
+    expect(notifs[0].html).toContain('Étudier la demande') // même gabarit que les liens de connexion
     const list = (await (await op.get('/api/operator/signups?status=pending')).json()).signups
     expect(list).toHaveLength(1)
     expect(list[0]).toMatchObject({ company: 'Ascenseurs Diallo', email: 'awa@diallo.test', status: 'pending' })

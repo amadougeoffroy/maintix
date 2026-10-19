@@ -98,3 +98,17 @@ describe('catalogue des offres', () => {
     expect((await dg.post('/api/operator/plans', { code: 'x-x', ...body })).status).toBe(403)
   })
 })
+
+describe('demandes d’accès : notification des opérateurs', () => {
+  it('prévient chaque adresse de OPERATOR_EMAILS, même sans compte, avec le gabarit professionnel', async () => {
+    const e = await makeEnv({ OPERATOR_EMAILS: 'boss@maintix.test, second@maintix.test' })
+    await bootstrap(e, 'ada@a.test')
+    const res = await e.app.request('/api/public/signup', json({ company: 'Ascenseurs Diallo', name: 'Awa Diallo', email: 'awa@diallo.test', phone: '+2250700000000', message: 'Bonjour' }))
+    expect(res.status).toBe(200)
+    const notifs = e.mailer.sent.filter((m) => m.subject === 'Nouvelle demande d\'accès : Ascenseurs Diallo')
+    expect(notifs.map((m) => m.to).sort()).toEqual(['ada@a.test', 'boss@maintix.test', 'second@maintix.test'])
+    expect(notifs[0].html).toContain('cid:maintix-logo')
+    expect(notifs[0].html).toContain('Awa Diallo')
+    expect(notifs[0].html).toContain('+2250700000000')
+  })
+})

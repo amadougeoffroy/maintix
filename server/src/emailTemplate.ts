@@ -27,6 +27,8 @@ export interface EmailContent {
   paragraphs: string[]
   /** Encart « fiche » : libellé / valeur. */
   facts?: [string, string][]
+  /** Liste d'avantages : titre + description. */
+  bullets?: { title: string; text: string }[]
   button?: { label: string; url: string }
   /** Paragraphes secondaires, en plus petit. */
   notes?: string[]
@@ -39,6 +41,9 @@ export function renderEmail(c: EmailContent): { html: string; attachments: Attac
         .map(([k, v]) => `<div style="font:400 12px/1.4 ${FONT};color:#5d716f;text-transform:uppercase;letter-spacing:.04em">${esc(k)}</div><div style="font:600 16px/1.4 ${FONT};color:${INK};margin:0 0 10px">${esc(v)}</div>`)
         .join('')
         .replace(/margin:0 0 10px">([^<]*)<\/div>$/, 'margin:0">$1</div>')}</td></tr></table>`
+    : ''
+  const bullets = c.bullets?.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 22px">${c.bullets.map((b) => `<tr><td width="34" valign="top" style="padding:0 0 14px"><div style="width:24px;height:24px;border-radius:50%;background:${AMBER};color:#1c1203;text-align:center;font:800 14px/24px ${FONT}">✓</div></td><td valign="top" style="padding:0 0 14px"><div style="font:700 15px/1.4 ${FONT};color:${INK}">${esc(b.title)}</div><div style="font:400 14px/1.5 ${FONT};color:#42615f">${esc(b.text)}</div></td></tr>`).join('')}</table>`
     : ''
   const button = c.button
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 22px"><tr><td align="center" bgcolor="${TEAL}" style="border-radius:10px"><a href="${esc(c.button.url)}" style="display:inline-block;padding:14px 28px;font:700 16px/1 ${FONT};color:#ffffff;text-decoration:none;border-radius:10px">${esc(c.button.label)}</a></td></tr></table>
@@ -57,7 +62,7 @@ export function renderEmail(c: EmailContent): { html: string; attachments: Attac
     <tr><td bgcolor="${AMBER}" style="height:4px;line-height:4px;font-size:0;background:${AMBER}">&nbsp;</td></tr>
     <tr><td bgcolor="#ffffff" style="background:#ffffff;padding:32px 30px 14px;border-radius:0 0 16px 16px">
       <h1 style="margin:0 0 18px;font:800 22px/1.3 ${FONT};color:${INK};letter-spacing:-.01em">${esc(c.title)}</h1>
-      ${c.paragraphs.map(p).join('')}${facts}${button}${notes}
+      ${c.paragraphs.map(p).join('')}${facts}${bullets}${button}${notes}
     </td></tr>
     <tr><td align="center" style="padding:18px 12px 4px;font:400 12px/1.6 ${FONT};color:#7a8b89">Maintix · Maintenance d’ascenseurs, simplement.<br>${contactEmail ? `Une question ? Écrivez-nous : <a href="mailto:${esc(contactEmail)}" style="color:#5d716f">${esc(contactEmail)}</a>` : 'Cet e-mail a été envoyé automatiquement, merci de ne pas y répondre.'}</td></tr>
   </table>
@@ -72,6 +77,7 @@ export function plainEmail(c: EmailContent): string {
     c.title, '',
     ...c.paragraphs.flatMap((t) => [t, '']),
     ...(c.facts ?? []).map(([k, v]) => `${k} : ${v}`), ...(c.facts?.length ? [''] : []),
+    ...(c.bullets ?? []).map((b) => `- ${b.title} : ${b.text}`), ...(c.bullets?.length ? [''] : []),
     ...(c.button ? [`${c.button.label} :`, c.button.url, ''] : []),
     ...(c.notes ?? []).flatMap((t) => [t, '']),
     'Maintix',

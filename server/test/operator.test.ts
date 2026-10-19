@@ -58,7 +58,7 @@ describe('création d’une entreprise et de son premier administrateur', () => 
   it('crée l’entreprise, le compte, la fiche technicien et envoie le lien de connexion', async () => {
     const before = env.mailer.sent.length
     const orgId = await createOrg(op, 'Ascenseurs Koné', 'kone@exemple.test', 'Moussa Koné')
-    const mail = env.mailer.sent[before]
+    const mail = env.mailer.sent.slice(before).find((m) => m.subject.startsWith('Votre espace Maintix'))!
     expect(mail.to).toBe('kone@exemple.test')
     expect(mail.subject).toBe('Votre espace Maintix « Ascenseurs Koné » est prêt')
     expect(mail.text).toContain('#/auth?token=')
@@ -216,7 +216,7 @@ describe('inscription en libre-service', () => {
     const before = env.mailer.sent.length
     const r = await op.post(`/api/operator/signups/${id}/approve`, { plan: 'essentiel' })
     expect(r.status).toBe(200)
-    expect(env.mailer.sent[before].subject).toBe('Votre espace Maintix « Ascenseurs Diallo » est prêt')
+    expect(env.mailer.sent.slice(before).some((m) => m.subject === 'Votre espace Maintix « Ascenseurs Diallo » est prêt')).toBe(true)
     expect((await orgByName('Ascenseurs Diallo')).offer.plan).toBe('essentiel')
     const s = await (await api(env, await login(env, 'awa@diallo.test')).get('/api/auth/session')).json()
     expect(s).toMatchObject({ role: 'admin', fullName: 'Awa Diallo', org: { name: 'Ascenseurs Diallo' } })

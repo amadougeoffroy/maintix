@@ -106,6 +106,8 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
   const op = [requireAuth, requireOperator] as const
 
   async function welcomeAdmin(userId: string, email: string, adminName: string, orgName: string, existingUser: boolean) {
+    // e-mail de présentation d'abord : l'e-mail d'invitation arrive ainsi en dernier, en haut de la boîte de réception
+    await presentationMail(email, adminName, orgName).catch(() => {}) // promotionnel : son échec ne doit pas faire échouer la création
     const url = await loginUrl(userId)
     await mailer.send({
       to: email,
@@ -117,6 +119,28 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
         facts: [['Entreprise', orgName], ['Rôle', 'Administrateur'], ['Compte', email]],
         button: { label: 'Accéder à la plateforme', url },
         notes: ['Ce lien est valable 15 minutes et ne peut être utilisé qu\'une seule fois.', 'À bientôt, l\'équipe Maintix'],
+      }),
+    })
+  }
+
+  /** Second e-mail, promotionnel : présente Maintix à la nouvelle entreprise (avantages, démarrage, lien vers le site). */
+  async function presentationMail(email: string, adminName: string, orgName: string) {
+    await mailer.send({
+      to: email,
+      subject: `Maintix pour « ${orgName} » : tout ce que vous pouvez faire`,
+      ...emailParts({
+        preheader: 'Visites sur mobile, rapports scellés, planning, facturation : découvrez Maintix.',
+        title: `Bienvenue chez Maintix, ${adminName}`,
+        paragraphs: ['Maintix réunit vos techniciens, votre bureau et vos clients sur une seule plateforme pensée pour la maintenance d’ascenseurs. Chaque visite, tracée.', 'Voici ce que votre équipe peut faire dès aujourd’hui :'],
+        bullets: [
+          { title: 'Visites sur téléphone, même sans réseau', text: 'Check-list guidée par zone, mesures, photos et signature du client. Tout se synchronise au retour du réseau.' },
+          { title: 'Rapports scellés', text: 'Chaque rapport est figé à la clôture avec une empreinte SHA-256 et part en PDF chez le client en un clic.' },
+          { title: 'Planning et astreinte', text: 'Affectez les missions, suivez les habilitations et alertez le bon technicien, avec relance automatique.' },
+          { title: 'Parc, contrats, devis et factures', text: 'Dossier de chaque appareil, indexations, factures numérotées en FCFA et journal des ventes exportable.' },
+          { title: 'QR code dans chaque cabine', text: 'Vos clients signalent une panne et suivent la réparation, sans compte à créer.' },
+        ],
+        button: { label: 'Découvrir Maintix', url: config.appUrl },
+        notes: ['Pour démarrer : renseignez votre entreprise, invitez votre équipe, importez votre parc d’ascenseurs. Une visite guidée vous accompagne à votre première connexion.', 'Une question ? Contactez votre interlocuteur Maintix.'],
       }),
     })
   }

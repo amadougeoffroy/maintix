@@ -112,3 +112,20 @@ describe('demandes d’accès : notification des opérateurs', () => {
     expect(notifs[0].html).toContain('+2250700000000')
   })
 })
+
+describe('création d’une entreprise : e-mail de présentation', () => {
+  it('envoie, en plus du lien d’invitation, un e-mail qui présente Maintix (avantages, bouton vers le site)', async () => {
+    await createOrg(op, 'Cliente SA', 'dg@cliente.test', 'Directeur')
+    const mails = env.mailer.sent.filter((m) => m.to === 'dg@cliente.test')
+    expect(mails).toHaveLength(2)
+    const promo = mails.find((m) => m.subject.includes('tout ce que vous pouvez faire'))!
+    expect(promo.html).toContain('Rapports scellés')
+    expect(promo.html).toContain('Découvrir Maintix')
+    expect(promo.html).toContain('href="https://cabine.test"')
+    expect(promo.html).toContain('cid:maintix-logo')
+    expect(promo.text).toContain('Visites sur téléphone')
+    expect(promo.html).not.toContain('/#/auth?token') // aucun jeton dans l'e-mail promotionnel
+    expect(mails.at(-1)!.subject).toContain('est prêt') // le lien d'invitation arrive en dernier
+    expect(mails.at(-1)!.text).toContain('#/auth?token=')
+  })
+})

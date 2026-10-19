@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarClock, ClipboardCheck, FileCheck2, QrCode, Receipt, ShieldCheck, Smartphone, WifiOff, Building2, ArrowRight } from 'lucide-react'
+import { CalendarClock, FileCheck2, QrCode, Receipt, ShieldCheck, Smartphone, WifiOff, Building2, ArrowRight } from 'lucide-react'
 import { Logo } from '../brand/Logo'
+import { ElevatorShaft } from '../components/ElevatorShaft'
 
 const FEATURES = [
   { icon: Smartphone, title: 'Visites sur mobile', text: 'Check-list guidée par zone, mesures, pièces, photos et signature du client, au doigt, sur le palier.' },
@@ -19,16 +21,42 @@ const STEPS = [
   ['Intervenez, tracez, facturez', 'Vos équipes interviennent, les rapports partent chez vos clients, la facturation suit.'],
 ]
 
+/** Les sections de la page sont des « étages » : le panneau de droite fait office de boutons d'appel. */
+const FLOORS: [string, string, string][] = [['top', 'RDC', 'Accueil'], ['fonctionnalites', '1', 'Fonctionnalités'], ['demarrer', '2', 'Démarrer'], ['acces', '3', 'Accès']]
+
+function FloorPanel() {
+  const [active, setActive] = useState('top')
+  useEffect(() => {
+    const els = FLOORS.map(([id]) => document.getElementById(id)).filter((e): e is HTMLElement => !!e)
+    const io = new IntersectionObserver((entries) => {
+      const vis = entries.filter((e) => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
+      if (vis) setActive(vis.target.id)
+    }, { rootMargin: '-35% 0px -55% 0px', threshold: [0, 0.01, 0.5, 1] })
+    els.forEach((e) => io.observe(e))
+    return () => io.disconnect()
+  }, [])
+  return (
+    <nav className="floor-panel" aria-label="Étages de la page">
+      {FLOORS.map(([id, label, name]) => (
+        <a key={id} href={`#${id}`} className={active === id ? 'on' : ''} aria-label={`Aller à : ${name}`} aria-current={active === id ? 'true' : undefined} title={name}
+          onClick={(e) => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }) }}>{label}</a>
+      ))}
+    </nav>
+  )
+}
+
 /** Page de présentation publique (racine du site). */
 export default function Landing() {
   return (
-    <div className="landing">
+    <div className="landing" id="top">
+      <FloorPanel />
       <header className="l-head">
         <div className="l-wrap l-head-in">
           <Link to="/" aria-label="Maintix, accueil"><Logo height={30} /></Link>
           <nav className="l-nav" aria-label="Présentation">
             <a href="#fonctionnalites">Fonctionnalités</a>
             <a href="#demarrer">Comment ça marche</a>
+            <a href="#acces">Accès</a>
           </nav>
           <div className="l-actions">
             <Link className="btn sm ghost" to="/login">Se connecter</Link>
@@ -50,23 +78,13 @@ export default function Landing() {
               </div>
               <p className="small muted">Pas de mot de passe : un lien de connexion sécurisé vous est envoyé par e-mail.</p>
             </div>
-            <div className="l-mock" aria-hidden="true">
-              <div className="l-mock-card">
-                <div className="l-mock-top"><span className="l-dot" /> Visite terminée</div>
-                <strong>Ascenseur A1 · Les Lilas</strong>
-                <ul>
-                  <li><ClipboardCheck size={16} /> Check-list complète · 24 points</li>
-                  <li><FileCheck2 size={16} /> Signature du gardien</li>
-                  <li><ShieldCheck size={16} /> Rapport scellé · SHA-256</li>
-                </ul>
-                <div className="l-mock-btn">Envoyer le rapport au client</div>
-              </div>
-            </div>
+            <div className="l-mock"><ElevatorShaft /></div>
           </div>
         </section>
 
         <section id="fonctionnalites" className="l-section">
           <div className="l-wrap">
+            <p className="l-floor">Étage 1</p>
             <h2>Tout le métier, dans une seule application</h2>
             <p className="l-sub">Pensée pour le terrain d’abord : gros boutons, saisie rapide, utilisable à une main.</p>
             <ul className="l-grid">
@@ -83,6 +101,7 @@ export default function Landing() {
 
         <section id="demarrer" className="l-section alt">
           <div className="l-wrap">
+            <p className="l-floor">Étage 2</p>
             <h2>Démarrer en trois étapes</h2>
             <ol className="l-steps">
               {STEPS.map(([t, d], i) => (
@@ -92,9 +111,10 @@ export default function Landing() {
           </div>
         </section>
 
-        <section className="l-section">
+        <section id="acces" className="l-section">
           <div className="l-wrap">
             <div className="l-final">
+              <p className="l-floor on-dark">Étage 3 · Terminus</p>
               <h2>Prêt à simplifier vos interventions ?</h2>
               <p>Faites votre demande d’accès, ou connectez-vous si votre entreprise est déjà inscrite.</p>
               <div className="l-cta center">

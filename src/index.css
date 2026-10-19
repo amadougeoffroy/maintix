@@ -274,3 +274,30 @@ html { scroll-behavior: smooth; } @media (prefers-reduced-motion: reduce) { html
 .renew-banner .banner-text { flex: 1 1 260px; margin: 0; line-height: 1.4; } .renew-banner .banner-text svg, .op-banner .banner-text svg { vertical-align: -3px; margin-right: 6px; }
 .renew-banner .btn { background: #fff; color: #7f1313; border-color: #fff; min-height: 36px; }
 @media print { .renew-banner { display: none !important; } }
+
+/* ---------- ascenseur : gaine animée, afficheur, panneau d'étages ---------- */
+.l-mock { padding: 0; }
+.shaft { position: relative; width: min(280px, 78%); margin: 0 auto; }
+.shaft-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.shaft-wall { fill: var(--surface-2); stroke: var(--line); stroke-width: 3; }
+.shaft-line { stroke: var(--line); stroke-width: 2; stroke-dasharray: 4 5; }
+.shaft-label { fill: var(--muted); font: 700 11px/1 'Inter Variable', system-ui, sans-serif; }
+.shaft-cable { stroke: var(--muted); stroke-width: 2; }
+.cab-body { fill: var(--ink); } .cab-inside { fill: #fbbf24; } 
+.cab-x-top { stroke: #0f766e; } .cab-x-bottom { stroke: #92400e; }
+.cab-x-top, .cab-x-bottom { fill: none; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+.cab-door { fill: #cfdad9; stroke: #9db0ae; stroke-width: 1; }
+.shaft-display { position: absolute; left: 50%; top: -14px; transform: translateX(-50%); z-index: 2; display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 96px; padding: 6px 14px; border-radius: 10px; background: #0b1514; color: #fbbf24; font: 700 22px/1 ui-monospace, 'SF Mono', Menlo, monospace; letter-spacing: .08em; box-shadow: inset 0 0 0 2px #26403d, 0 6px 16px rgb(0 0 0 / .25); text-shadow: 0 0 10px rgb(251 191 36 / .7); }
+.shaft-arrow { display: inline-block; width: 1ch; font-size: 16px; }
+.l-floor { margin: 0 auto 6px; width: fit-content; padding: 3px 10px; border-radius: 6px; background: #0b1514; color: #fbbf24; font: 700 .75rem/1.4 ui-monospace, 'SF Mono', Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; }
+.l-floor.on-dark { background: #fbbf24; color: #1c1203; }
+.floor-panel { display: none; }
+@media (min-width: 1100px) {
+  .floor-panel { position: fixed; right: 18px; top: 50%; transform: translateY(-50%); z-index: 25; display: grid; gap: 10px; padding: 12px 9px; background: #0b2b2a; border-radius: 16px; box-shadow: 0 10px 30px rgb(0 0 0 / .25); }
+  .floor-panel a { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; border: 2px solid #4d6e6b; color: #d6e6e4; font: 700 .85rem/1 ui-monospace, 'SF Mono', Menlo, monospace; text-decoration: none; background: #12403d; transition: background .15s, box-shadow .15s, color .15s; }
+  .floor-panel a:hover, .floor-panel a:focus-visible { border-color: #fbbf24; color: #fbbf24; }
+  .floor-panel a.on { background: #fbbf24; border-color: #fbbf24; color: #1c1203; box-shadow: 0 0 14px rgb(251 191 36 / .7); }
+}
+@media (prefers-reduced-motion: reduce) { .shaft-svg g, .shaft-svg line, .floor-panel a { transition: none !important; } }
+
+.landing section[id], .landing [id='top'] { scroll-margin-top: 76px; }

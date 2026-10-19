@@ -131,6 +131,11 @@ export default function Landing() {
       <footer className="l-foot">
         <div className="l-wrap l-foot-in">
           <Logo height={22} />
+          <nav className="l-legal" aria-label="Informations légales">
+            <Link to="/legal/mentions">Mentions légales</Link>
+            <Link to="/legal/confidentialite">Confidentialité</Link>
+            <Link to="/legal/conditions">Conditions d’utilisation</Link>
+          </nav>
           <span className="small muted">© {new Date().getFullYear()} Maintix · Maintenance d’ascenseurs, simplement.</span>
         </div>
       </footer>

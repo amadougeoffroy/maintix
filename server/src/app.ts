@@ -21,7 +21,7 @@ import { getPlan, loadPlans } from './plans'
 import type { Notifier } from './notify'
 import { Metrics, newRequestId, silentLogger, type Logger } from './observability'
 import { totals } from '../../shared/money'
-import { emailParts, ROLE_LABEL } from './emailTemplate'
+import { emailParts, ROLE_LABEL, setEmailContact } from './emailTemplate'
 import { sealPayload } from '../../shared/canonical'
 
 export interface Deps {
@@ -65,6 +65,7 @@ const uid = (p: string) => `${p}_${randomToken().slice(0, 10)}`
 
 export function createApp({ db, config, mailer, notifier, logger = silentLogger, metrics = new Metrics(), metricsToken, reportError, version = process.env.APP_VERSION ?? 'dev', now = Date.now, gateway = (c) => jekoGateway(c) }: Deps) {
   const app = new Hono<Env>()
+  setEmailContact(config.legal.email)
   // En https : préfixe __Host- (cookie lié à l'hôte exact, Secure, sans Domain).
   const COOKIE = config.secureCookies ? `__Host-${COOKIE_PLAIN}` : COOKIE_PLAIN
   const limit = createRateLimiter(db, now)
@@ -183,6 +184,9 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
       }),
     })
   }
+
+  /** Informations publiques de l'éditeur (mentions légales). */
+  app.get('/api/public/info', (c) => c.json({ legal: config.legal }))
 
   /* ---------- santé ---------- */
   app.get('/api/health', (c) => c.json({ ok: true, mode: 'server', version }))

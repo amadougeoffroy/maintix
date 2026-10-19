@@ -118,6 +118,7 @@ export async function applyPayment(db: Db, paymentId: string, today = todayStr()
 /** Tâche périodique : suspend les entreprises échues et prévient leurs administrateurs (lien vers le paiement). */
 export async function sweepSubscriptions(db: Db, mailer: Mailer, config: Config, today = todayStr()) {
   const suspended = await runAutoSuspension(db, today)
+  await sendRenewalReminders(db, mailer, config, today)
   for (const o of suspended) {
     const admins = (await db.query<{ email: string; full_name: string }>(`select u.email, m.full_name from members m join users u on u.id = m.user_id where m.org_id = $1 and m.role = 'admin'`, [o.id])).rows
     const trial = o.code === 'trial_expired'
@@ -135,4 +136,38 @@ export async function sweepSubscriptions(db: Db, mailer: Mailer, config: Config,
     }
   }
   return suspended
+}
+
+/** Rappels d'échéance : un e-mail aux administrateurs quand il reste 7 jours ou moins, puis quand il reste 1 jour ou moins (une fois chacun). */
+export async function sendRenewalReminders(db: Db, mailer: Mailer, config: Config, today = todayStr()) {
+  const orgs = (await db.query<{ id: string; name: string; plan: string; ends_on: string; days: number }>(
+    `select id, name, plan, ends_on, (ends_on::date - $1::date) as days from (
+       select id, name, plan, to_char(coalesce(subscription_ends_on, case when plan = 'essai' then trial_ends_on end), 'YYYY-MM-DD') as ends_on
+         from organisations where kind = 'client' and status = 'active') o
+      where ends_on is not null and ends_on::date >= $1::date and (ends_on::date - $1::date) <= 7`, [today],
+  )).rows
+  const sent: { org: string; kind: string }[] = []
+  for (const o of orgs) {
+    const kind = o.days <= 1 ? 'd1' : 'd7'
+    const fresh = (await db.query(`insert into renewal_reminders (org_id, ends_on, kind) values ($1,$2,$3) on conflict do nothing returning org_id`, [o.id, o.ends_on, kind])).rows.length
+    if (!fresh) continue
+    const admins = (await db.query<{ email: string; full_name: string }>(`select u.email, m.full_name from members m join users u on u.id = m.user_id where m.org_id = $1 and m.role = 'admin'`, [o.id])).rows
+    const what = o.plan === 'essai' ? 'votre période d’essai' : 'votre abonnement'
+    const when = o.days <= 0 ? 'se termine aujourd’hui' : o.days === 1 ? 'se termine demain' : `se termine dans ${o.days} jours`
+    for (const a of admins) {
+      await mailer.send({
+        to: a.email,
+        subject: `${o.days <= 1 ? 'Dernier rappel' : 'Rappel'} : ${what} ${when}`,
+        ...emailParts({
+          preheader: `Renouvelez avant le ${o.ends_on.split('-').reverse().join('/')} pour ne pas perdre l’accès.`,
+          title: `Bonjour ${a.full_name},`,
+          paragraphs: [`${what.charAt(0).toUpperCase() + what.slice(1)} de « ${o.name} » ${when}.`, 'Renouvelez-le avant cette date : passé ce délai, l’accès est suspendu automatiquement (vos données restent conservées). Le paiement en ligne (1, 3, 6 ou 12 mois) rétablit ou prolonge l’accès immédiatement.'],
+          facts: [['Entreprise', o.name], ['Échéance', o.ends_on.split('-').reverse().join('/')]],
+          button: { label: 'Renouveler maintenant', url: `${config.appUrl}/#/office/settings/abonnement` },
+        }),
+      }).catch(() => {})
+    }
+    sent.push({ org: o.name, kind })
+  }
+  return sent
 }

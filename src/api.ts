@@ -172,6 +172,7 @@ export const api = {
   opAddOperator: (email: string) => call<{ ok: true }>('POST', '/operator/operators', { email }),
   opRemoveOperator: (id: string) => call<{ ok: true }>('DELETE', `/operator/operators/${id}`, {}),
   orgPlan: () => call<{ status: string; offer: Offer; usage: OrgUsage; flags: OperatorOrg['flags']; estimate: OperatorOrg['estimate'] }>('GET', '/org/plan'),
+  info: () => call<{ legal: { name?: string; email?: string; phone?: string; address?: string; registration?: string; host?: string } }>('GET', '/public/info'),
   signup: (b: { company: string; name: string; email: string; phone?: string; message?: string; website?: string }) => call<{ ok: true }>('POST', '/public/signup', b),
   report: (b: { elevatorId: string; description: string; trapped: boolean; reporter: string }) => call<{ ok: true; jobId: string }>('POST', '/public/report', b),
   status: (id: string) => call<{ label: string; siteName: string; status: string; lastVisit: string | null; job: { status: string; createdAt: string; timeline: { at: string; label: string }[] } | null }>('GET', `/public/status/${encodeURIComponent(id)}`),

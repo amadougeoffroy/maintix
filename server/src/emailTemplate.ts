@@ -10,6 +10,10 @@ const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Helvetica,Arial,
 
 export const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
+let contactEmail: string | undefined
+/** Adresse de contact affichée en pied d'e-mail (LEGAL_EMAIL) ; sans elle, l'e-mail demande de ne pas répondre. */
+export const setEmailContact = (email?: string) => { contactEmail = email }
+
 export const LOGO_CID = 'maintix-logo'
 export const logoAttachment = (): Attachment => ({
   filename: 'maintix.png', content: Buffer.from(EMAIL_LOGO_PNG_BASE64, 'base64'), contentType: 'image/png', cid: LOGO_CID, inline: true,
@@ -55,7 +59,7 @@ export function renderEmail(c: EmailContent): { html: string; attachments: Attac
       <h1 style="margin:0 0 18px;font:800 22px/1.3 ${FONT};color:${INK};letter-spacing:-.01em">${esc(c.title)}</h1>
       ${c.paragraphs.map(p).join('')}${facts}${button}${notes}
     </td></tr>
-    <tr><td align="center" style="padding:18px 12px 4px;font:400 12px/1.6 ${FONT};color:#7a8b89">Maintix · Maintenance d’ascenseurs, simplement.<br>Cet e-mail a été envoyé automatiquement, merci de ne pas y répondre.</td></tr>
+    <tr><td align="center" style="padding:18px 12px 4px;font:400 12px/1.6 ${FONT};color:#7a8b89">Maintix · Maintenance d’ascenseurs, simplement.<br>${contactEmail ? `Une question ? Écrivez-nous : <a href="mailto:${esc(contactEmail)}" style="color:#5d716f">${esc(contactEmail)}</a>` : 'Cet e-mail a été envoyé automatiquement, merci de ne pas y répondre.'}</td></tr>
   </table>
 </td></tr></table>
 </body></html>`

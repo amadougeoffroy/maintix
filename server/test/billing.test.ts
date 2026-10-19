@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { addMonths, runAutoSuspension, verifyJekoSignature, type Gateway } from '../src/billing'
+import { addMonths, runAutoSuspension, sendRenewalReminders, verifyJekoSignature, type Gateway } from '../src/billing'
 import { api, bootstrap, createOrg, login, makeEnv, type Env } from './helpers'
 
 let env: Env
@@ -264,5 +264,45 @@ describe('finances de la console', () => {
     expect((await op.post(`/api/operator/payments/${out.paymentId}/confirm`, {})).status).toBe(200)
     expect((await orgOf(id)).status).toBe('active')
     expect((await op.post(`/api/operator/payments/${out.paymentId}/confirm`, {})).status).toBe(404) // déjà payé
+  })
+})
+
+describe('rappels avant échéance', () => {
+  const to = (email: string) => env.mailer.sent.filter((m) => m.to === email)
+  it('envoie un rappel à 7 jours puis un dernier rappel à 1 jour, une seule fois chacun', async () => {
+    const id = await createOrg(op, 'Cliente SA', 'dg@c.test', 'DG', 'essentiel')
+    await createOrg(op, 'Loin SA', 'dg@loin.test', 'DG', 'essentiel')
+    await env.db.query(`update organisations set subscription_ends_on = current_date + 5 where id = $1`, [id])
+    await env.db.query(`update organisations set subscription_ends_on = current_date + 30 where name = 'Loin SA'`)
+    const base = to('dg@c.test').length
+    expect((await sendRenewalReminders(env.db, env.mailer, env.config)).map((x) => `${x.org}:${x.kind}`)).toEqual(['Cliente SA:d7'])
+    const m = to('dg@c.test')[base]
+    expect(m.subject).toContain('se termine dans 5 jours')
+    expect(m.html).toContain('Renouveler maintenant')
+    expect(m.html).toContain('/#/office/settings/abonnement')
+    expect(await sendRenewalReminders(env.db, env.mailer, env.config)).toEqual([]) // pas de doublon
+    expect(to('dg@loin.test').filter((x) => x.subject.includes('Rappel'))).toHaveLength(0)
+    await env.db.query(`update organisations set subscription_ends_on = current_date + 1 where id = $1`, [id])
+    expect((await sendRenewalReminders(env.db, env.mailer, env.config)).map((x) => x.kind)).toEqual(['d1'])
+    expect(to('dg@c.test').at(-1)!.subject).toContain('Dernier rappel')
+    expect(await sendRenewalReminders(env.db, env.mailer, env.config)).toEqual([])
+  })
+  it('couvre aussi la fin de l’essai, ignore les entreprises suspendues et celles sans échéance', async () => {
+    const trial = await createOrg(op, 'Essai SA', 'dg@e.test', 'DG')
+    const susp = await createOrg(op, 'Suspendue SA', 'dg@s.test', 'DG', 'essentiel')
+    await createOrg(op, 'Libre SA', 'dg@l.test', 'DG', 'sur-mesure')
+    await env.db.query(`update organisations set trial_ends_on = current_date + 3 where id = $1`, [trial])
+    await env.db.query(`update organisations set subscription_ends_on = current_date + 3, status = 'suspended' where id = $1`, [susp])
+    const r = await sendRenewalReminders(env.db, env.mailer, env.config)
+    expect(r.map((x) => x.org)).toEqual(['Essai SA'])
+    expect(to('dg@e.test').at(-1)!.subject).toContain('période d’essai')
+  })
+})
+
+describe('informations de l’éditeur', () => {
+  it('publie uniquement celles qui sont configurées', async () => {
+    const e = await makeEnv({ LEGAL_NAME: 'Windsit Digital', LEGAL_EMAIL: 'contact@windsit-digital.com' })
+    const info = await (await e.app.request('/api/public/info')).json()
+    expect(info.legal).toEqual({ name: 'Windsit Digital', email: 'contact@windsit-digital.com' })
   })
 })

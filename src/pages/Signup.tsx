@@ -36,6 +36,7 @@ export default function Signup() {
           {/* piège à robots : invisible pour les personnes, rempli par les automates */}
           <div style={{ position: 'absolute', left: '-9999px' }} aria-hidden="true"><label>Site web<input tabIndex={-1} autoComplete="off" value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} /></label></div>
           {state === 'error' && <p role="alert" style={{ color: 'var(--bad)' }}>{err}</p>}
+          <p className="small muted">En envoyant cette demande, vous acceptez les <Link to="/legal/conditions">conditions d’utilisation</Link> et reconnaissez avoir pris connaissance de la <Link to="/legal/confidentialite">politique de confidentialité</Link>.</p>
           <button className="btn primary block" disabled={state === 'sending'}>{state === 'sending' ? 'Envoi…' : 'Envoyer ma demande'}</button>
           <p className="small muted center"><Link to="/login">J’ai déjà un accès</Link></p>
         </form>

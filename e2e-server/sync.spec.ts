@@ -63,6 +63,21 @@ test.describe.serial('mode serveur', () => {
     await page.getByRole('link', { name: 'Demander un accès' }).first().click()
     await expect(page.getByRole('heading', { name: 'Demander un accès' })).toBeVisible()
     await expect(page.getByLabel('Nom de l’entreprise')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'politique de confidentialité' })).toBeVisible() // consentement explicite sur le formulaire
+
+    // pages légales, depuis le pied de page
+    await page.goto('/')
+    for (const [link, title] of [['Mentions légales', 'Mentions légales'], ['Confidentialité', 'Politique de confidentialité'], ['Conditions d’utilisation', 'Conditions d’utilisation']] as const) {
+      await page.getByRole('navigation', { name: 'Informations légales' }).getByRole('link', { name: link }).click()
+      await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible()
+      for (const scheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: scheme })
+        const a = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
+        expect(a.violations.map((v) => `${title} ${scheme} ${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`)).toEqual([])
+      }
+      await page.emulateMedia({ colorScheme: 'light' })
+      await page.getByRole('link', { name: '← Accueil' }).click()
+    }
   })
 
   test('installation, connexion par lien, démo, invitation, synchro entre appareils', async ({ browser, page }) => {

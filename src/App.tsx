@@ -7,6 +7,7 @@ import Suspended from './pages/Suspended'
 import { FeedbackHost } from './components/FeedbackHost'
 import Login from './pages/Login'
 import Landing from './pages/Landing'
+import LegalPage from './pages/Legal'
 import BillingReturn from './pages/BillingReturn'
 import Auth from './pages/Auth'
 import Setup from './pages/Setup'
@@ -54,6 +55,7 @@ export default function App() {
       <Route path="/auth" element={<Auth />} />
       <Route path="/setup" element={<Setup />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/legal/:page" element={<LegalPage />} />
       <Route path="/billing/return" element={<BillingReturn />} />
       <Route path="/operator" element={session.operator ? <OperatorShell /> : <Navigate to="/" replace />}>
         <Route index element={<OperatorConsole />} />

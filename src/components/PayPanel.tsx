@@ -18,8 +18,9 @@ export function PayPanel({ compact = false }: { compact?: boolean }) {
   useEffect(() => { api.billing().then((v) => { setO(v); setPlan((p) => p || (v.plans.some((x) => x.code === v.current.plan) ? v.current.plan : v.plans[0]?.code ?? '')) }).catch(() => {}) }, [])
   if (!o) return null
   const chosen = o.plans.find((p) => p.code === plan)
-  const quote = chosen ? priceFor(chosen.priceMonthly, months) : null
-  const amount = quote?.total ?? 0
+  const vatRate = o.vat.enabled ? o.vat.rate : 0
+  const quote = chosen ? priceFor(chosen.priceMonthly, months, vatRate) : null
+  const amount = quote?.ttc ?? 0 // total à payer (TVA comprise si elle est activée)
   const sus = o.current.suspension
   const blocked = sus && !sus.payable
   return (
@@ -44,7 +45,7 @@ export function PayPanel({ compact = false }: { compact?: boolean }) {
               {o.plans.map((p) => (
                 <button key={p.code} type="button" role="radio" aria-checked={plan === p.code} className={`plan-card ${plan === p.code ? 'on' : ''}`} onClick={() => setPlan(p.code)}>
                   <span className="row between"><strong>{p.name}</strong>{o.current.plan === p.code && <Badge tone="brand">Offre actuelle</Badge>}</span>
-                  <span className="plan-price">{fcfa(p.priceMonthly)} <small>/ mois</small></span>
+                  <span className="plan-price">{fcfa(p.priceMonthly)} <small>/ mois{o.vat.enabled ? ' HT' : ''}</small></span>
                   <ul className="plan-perks">
                     <li><Check size={15} aria-hidden="true" /> {p.maxTechs === null ? 'Techniciens illimités' : `Jusqu’à ${p.maxTechs} techniciens`}</li>
                     <li><Check size={15} aria-hidden="true" /> {p.maxElevators === null ? 'Appareils illimités' : `Jusqu’à ${p.maxElevators} appareils`}</li>
@@ -66,7 +67,14 @@ export function PayPanel({ compact = false }: { compact?: boolean }) {
           </label>
           {chosen && (
             <div className="card stack" style={{ background: 'var(--surface-2)' }}>
-              <div className="row between wrap"><span className="muted">{chosen.name} · {months} mois × {fcfa(chosen.priceMonthly)}{quote && quote.discountPct > 0 ? <> = <s>{fcfa(quote.list)}</s></> : null}</span><strong style={{ fontSize: '1.3rem' }}>{fcfa(amount)}</strong></div>
+              <div className="row between wrap"><span className="muted">{chosen.name} · {months} mois × {fcfa(chosen.priceMonthly)}{o.vat.enabled ? ' HT' : ''}{quote && quote.discountPct > 0 ? <> = <s>{fcfa(quote.list)}</s></> : null}</span>{!o.vat.enabled && <strong style={{ fontSize: '1.3rem' }}>{fcfa(amount)}</strong>}</div>
+              {quote && o.vat.enabled && (
+                <div className="stack" style={{ gap: 4 }}>
+                  <div className="row between"><span className="muted">Total HT</span><span>{fcfa(quote.total)}</span></div>
+                  <div className="row between"><span className="muted">TVA {String(o.vat.rate).replace('.', ',')} %</span><span>{fcfa(quote.vat)}</span></div>
+                  <div className="row between"><strong>Total TTC à payer</strong><strong style={{ fontSize: '1.3rem' }}>{fcfa(quote.ttc)}</strong></div>
+                </div>
+              )}
               {quote && quote.discountPct > 0 && <p className="small" style={{ color: 'var(--ok)', fontWeight: 700 }}>Remise de {quote.discountPct} % : vous économisez {fcfa(quote.discount)}.</p>}
               <p className="small muted">Inclus : {chosen.maxTechs === null ? 'techniciens illimités' : `${chosen.maxTechs} techniciens`} et {chosen.maxElevators === null ? 'appareils illimités' : `${chosen.maxElevators} appareils`}.</p>
             </div>

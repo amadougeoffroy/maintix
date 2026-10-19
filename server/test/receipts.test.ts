@@ -142,3 +142,61 @@ describe('évolution mensuelle des encaissements par offre', () => {
     expect(f.collected.total).toBe(189000 + 90000 + 35000)
   })
 })
+
+describe('TVA optionnelle sur les abonnements', () => {
+  const setVat = (enabled: boolean, rate = 18) => op.fetch('PUT', '/api/operator/vat-settings', { enabled, rate })
+  it('est désactivée par défaut et réservée aux opérateurs', async () => {
+    expect(await (await op.get('/api/operator/vat-settings')).json()).toEqual({ enabled: false, rate: 18 })
+    expect((await op.fetch('PUT', '/api/operator/vat-settings', { enabled: true, rate: 150 })).status).toBe(400)
+    await createOrg(op, 'Cliente SA', 'dg@c.test', 'DG')
+    const dg = api(env, await login(env, 'dg@c.test'))
+    expect((await dg.get('/api/operator/vat-settings')).status).toBe(403)
+    expect((await dg.fetch('PUT', '/api/operator/vat-settings', { enabled: true, rate: 18 })).status).toBe(403)
+    expect((await (await dg.get('/api/billing/overview')).json()).vat).toEqual({ enabled: false, rate: 18 })
+  })
+  it('sans TVA, le montant payé est le prix (remisé) et le reçu ne détaille pas de TVA', async () => {
+    await createOrg(op, 'Cliente SA', 'dg@c.test', 'DG')
+    const dg = api(env, await login(env, 'dg@c.test'))
+    const r = await (await dg.post('/api/billing/checkout', { plan: 'essentiel', months: 6, method: 'wave' })).json()
+    expect(r).toMatchObject({ amount: 189000, vatRate: 0, vatAmount: 0 })
+  })
+  it('avec TVA, la TVA s’ajoute au total remisé et figure sur le paiement, le reçu PDF et l’e-mail', async () => {
+    expect((await setVat(true, 18)).status).toBe(200)
+    await createOrg(op, 'Cliente SA', 'dg@c.test', 'DG')
+    const dg = api(env, await login(env, 'dg@c.test'))
+    expect((await (await dg.get('/api/billing/overview')).json()).vat).toEqual({ enabled: true, rate: 18 })
+    const r = await (await dg.post('/api/billing/checkout', { plan: 'essentiel', months: 6, method: 'wave' })).json()
+    expect(r).toMatchObject({ amount: 223020, listAmount: 210000, discountPct: 10, vatRate: 18, vatAmount: 34020 }) // 189 000 HT + 34 020 de TVA
+    expect(created.at(-1)!.amount).toBe(223020) // Jèko encaisse le TTC
+    await hook(created.at(-1)!.reference)
+    const rec = (await loadReceipt(env.db, r.paymentId))!
+    expect(rec.data).toMatchObject({ amount: 223020, vatRate: 18, vatAmount: 34020 })
+    const text = pdfText(await buildReceiptPdf({ ...rec.data, legal: env.config.legal, appUrl: 'https://x', compress: false }))
+    for (const needle of ['210 000 FCFA', 'Remise de durée (10 %)', 'Total HT', '189 000 FCFA', 'TVA 18 %', '34 020 FCFA', 'Total TTC payé', '223 020 FCFA']) expect(text).toContain(needle)
+    const mail = env.mailer.sent.find((m) => m.to === 'dg@c.test' && m.subject.startsWith('Reçu de paiement'))!
+    expect(mail.html).toContain('Total HT')
+    expect(mail.html).toContain('TVA 18 %')
+    expect(mail.html).toContain('223 020 FCFA')
+  })
+  it('un changement de taux ou la désactivation ne modifie pas les paiements déjà faits', async () => {
+    await setVat(true, 18)
+    await createOrg(op, 'Cliente SA', 'dg@c.test', 'DG')
+    const dg = api(env, await login(env, 'dg@c.test'))
+    const first = await (await dg.post('/api/billing/checkout', { plan: 'essentiel', months: 1, method: 'wave' })).json()
+    await setVat(true, 10)
+    const second = await (await dg.post('/api/billing/checkout', { plan: 'essentiel', months: 1, method: 'wave' })).json()
+    await setVat(false)
+    const third = await (await dg.post('/api/billing/checkout', { plan: 'essentiel', months: 1, method: 'wave' })).json()
+    expect([first.amount, second.amount, third.amount]).toEqual([41300, 38500, 35000]) // 35 000 + 18 % / + 10 % / sans TVA
+    const rows = (await env.db.query<{ vat_rate: string; vat_amount: number }>('select vat_rate, vat_amount from payments order by created_at')).rows
+    expect(rows.map((r) => [Number(r.vat_rate), r.vat_amount])).toEqual([[18, 6300], [10, 3500], [0, 0]])
+  })
+  it('un paiement hors ligne reprend la TVA, sauf si un montant est saisi à la main', async () => {
+    await setVat(true, 18)
+    const id = await createOrg(op, 'Cliente SA', 'dg@c.test', 'DG')
+    await op.post(`/api/operator/orgs/${id}/payments`, { plan: 'essentiel', months: 1 })
+    await op.post(`/api/operator/orgs/${id}/payments`, { plan: 'essentiel', months: 1, amount: 50000 })
+    const rows = (await env.db.query<{ amount: number; vat_amount: number }>('select amount, vat_amount from payments order by created_at')).rows
+    expect(rows).toEqual([{ amount: 41300, vat_amount: 6300 }, { amount: 50000, vat_amount: 0 }])
+  })
+})

@@ -413,6 +413,27 @@ function Finance({ plans }: { plans: PlanPreset[] }) {
   )
 }
 
+function VatPanel() {
+  const [v, setV] = useState<{ enabled: boolean; rate: string } | null>(null)
+  useEffect(() => { api.opVat().then((x) => setV({ enabled: x.enabled, rate: String(x.rate) })).catch(() => {}) }, [])
+  if (!v) return null
+  return (
+    <form className="card stack" onSubmit={async (e) => {
+      e.preventDefault()
+      const rate = Number(v.rate.replace(',', '.'))
+      if (!Number.isFinite(rate) || rate < 0 || rate > 100) { feedback.toast('Taux de TVA invalide (0 à 100).', 'error'); return }
+      try { const r = await api.opSaveVat({ enabled: v.enabled, rate }); setV({ enabled: r.enabled, rate: String(r.rate) }); feedback.toast(r.enabled ? `TVA de ${r.rate} % appliquée aux nouveaux abonnements.` : 'TVA désactivée : les prix des offres sont payés tels quels.', 'info') }
+      catch { feedback.toast('Enregistrement impossible.', 'error') }
+    }}>
+      <h3>TVA sur les abonnements</h3>
+      <label className="row"><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={v.enabled} onChange={(e) => setV({ ...v, enabled: e.target.checked })} /> Appliquer la TVA aux abonnements</label>
+      <label className="field">Taux de TVA (%)<input inputMode="decimal" disabled={!v.enabled} value={v.rate} onChange={(e) => setV({ ...v, rate: e.target.value })} /></label>
+      <p className="small muted">Activée : les prix des offres sont considérés hors taxes ; la TVA s’ajoute au total (après remise de durée) et le reçu détaille HT, TVA et TTC. Désactivée : le prix de l’offre est le montant payé. Le réglage ne concerne que les nouveaux paiements.</p>
+      <div><button className="btn primary">Enregistrer la TVA</button></div>
+    </form>
+  )
+}
+
 function PaymentSettingsPanel() {
   const [v, setV] = useState<PaymentSettings | null>(null)
   const [f, setF] = useState({ apiKey: '', apiKeyId: '', storeId: '', webhookSecret: '' })
@@ -447,6 +468,7 @@ function PaymentSettingsPanel() {
           {stores.map((st) => <div key={st.id} className="row between wrap"><div><strong>{st.name}</strong><p className="small muted">{st.id}</p></div><button className="btn sm" type="button" onClick={() => { setF({ ...f, storeId: st.id }); feedback.toast('Identifiant repris : enregistrez pour l’appliquer.', 'info') }}>Utiliser</button></div>)}
         </section>
       )}
+      <VatPanel />
       <section className="card stack">
         <h3>Adresse du webhook à renseigner dans Jèko</h3>
         <code style={{ wordBreak: 'break-all' }}>{v.webhookUrl}</code>

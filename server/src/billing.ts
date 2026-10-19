@@ -21,6 +21,22 @@ export function addMonths(date: string, n: number): string {
   return `${ty}-${String(tm + 1).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`
 }
 
+/* ---------- TVA sur les abonnements (réglage de plateforme) ---------- */
+export interface VatSettings { enabled: boolean; rate: number }
+export async function getVat(db: Pick<Db, 'query'>): Promise<VatSettings> {
+  const rows = (await db.query<{ key: string; value: string }>(`select key, value from platform_settings where key in ('vat.enabled', 'vat.rate')`)).rows
+  const m = new Map(rows.map((r) => [r.key, r.value]))
+  const rate = Number(m.get('vat.rate') ?? 18)
+  return { enabled: m.get('vat.enabled') === '1', rate: Number.isFinite(rate) ? rate : 18 }
+}
+export async function setVat(db: Pick<Db, 'query'>, v: VatSettings) {
+  for (const [k, val] of [['vat.enabled', v.enabled ? '1' : '0'], ['vat.rate', String(v.rate)]]) {
+    await db.query(`insert into platform_settings (key, value) values ($1,$2) on conflict (key) do update set value = excluded.value, updated_at = now()`, [k, val])
+  }
+}
+/** Taux de TVA à appliquer à un nouvel abonnement (0 si la TVA est désactivée). */
+export const vatRateFor = async (db: Pick<Db, 'query'>) => { const v = await getVat(db); return v.enabled ? v.rate : 0 }
+
 /* ---------- passerelle de paiement ---------- */
 export interface JekoCreds { apiKey: string; apiKeyId: string; storeId: string }
 export interface Gateway {
@@ -192,7 +208,7 @@ export async function sendReceipt(db: Db, mailer: Mailer, config: Config, paymen
         preheader: `Votre paiement de ${fr(d.amount)} est bien reçu.`,
         title: `Merci, ${a.full_name}`,
         paragraphs: ['Nous avons bien reçu votre paiement : votre abonnement Maintix est à jour. Votre reçu est joint à ce message (PDF).'],
-        facts: [['Reçu', d.receiptNumber], ['Offre', `${d.planName} · ${d.months} mois`], ['Montant payé', fr(d.amount)], ['Valable jusqu’au', d.periodEnd.split('-').reverse().join('/')]],
+        facts: [['Reçu', d.receiptNumber], ['Offre', `${d.planName} · ${d.months} mois`], ...(d.vatRate > 0 ? ([['Total HT', fr(d.amount - d.vatAmount)], [`TVA ${String(d.vatRate).replace('.', ',')} %`, fr(d.vatAmount)]] as [string, string][]) : []), [d.vatRate > 0 ? 'Total TTC payé' : 'Montant payé', fr(d.amount)], ['Valable jusqu’au', d.periodEnd.split('-').reverse().join('/')]],
         button: { label: 'Accéder à la plateforme', url: `${config.appUrl}/#/` },
       }, [{ filename: `recu-${d.receiptNumber}.pdf`, content: pdf, contentType: 'application/pdf' }]),
     }).catch(() => {})
@@ -204,9 +220,9 @@ export async function sendReceipt(db: Db, mailer: Mailer, config: Config, paymen
 export async function loadReceipt(db: Pick<Db, 'query'>, paymentId: string, orgId?: string) {
   const p = (await db.query<{
     id: string; org_id: string; org: string; plan: string; months: number; amount: number; list_amount: number | null; discount_pct: number; source: string; method: string | null
-    reference: string; receipt_number: string | null; paid_at: string; period_start: string; period_end: string
+    reference: string; receipt_number: string | null; paid_at: string; period_start: string; period_end: string; vat_rate: string; vat_amount: number
   }>(
-    `select p.id, p.org_id, o.name as org, p.plan, p.months, p.amount, p.list_amount, p.discount_pct, p.source, p.method, p.reference, p.receipt_number, p.paid_at,
+    `select p.id, p.org_id, o.name as org, p.plan, p.months, p.amount, p.list_amount, p.discount_pct, p.source, p.method, p.reference, p.receipt_number, p.paid_at, p.vat_rate, p.vat_amount,
             to_char(p.period_start, 'YYYY-MM-DD') as period_start, to_char(p.period_end, 'YYYY-MM-DD') as period_end
        from payments p join organisations o on o.id = p.org_id where p.id = $1 and p.status = 'paid' and p.receipt_number is not null ${orgId ? 'and p.org_id = $2' : ''}`,
     orgId ? [paymentId, orgId] : [paymentId],
@@ -216,7 +232,7 @@ export async function loadReceipt(db: Pick<Db, 'query'>, paymentId: string, orgI
   return {
     orgId: p.org_id,
     data: {
-      receiptNumber: p.receipt_number!, orgName: p.org, planName: plan?.name ?? p.plan, months: p.months, amount: p.amount, listAmount: p.list_amount ?? p.amount, discountPct: p.discount_pct,
+      vatRate: Number(p.vat_rate), vatAmount: p.vat_amount, receiptNumber: p.receipt_number!, orgName: p.org, planName: plan?.name ?? p.plan, months: p.months, amount: p.amount, listAmount: p.list_amount ?? p.amount, discountPct: p.discount_pct,
       source: p.source as 'jeko' | 'manual', method: p.method, reference: p.reference, paidAt: new Date(p.paid_at).toISOString(), periodStart: p.period_start, periodEnd: p.period_end,
     },
   }

@@ -7,7 +7,7 @@ import type { Config } from './config'
 import type { Db } from './db'
 import type { Mailer } from './mailer'
 import { estimateAmount, getPlan, loadPlans, type OrgOffer, type Usage } from './plans'
-import { applyPayment, loadReceipt, reactivateOrg, sendReceipt, suspendOrg, todayStr, type Gateway, type JekoCreds } from './billing'
+import { applyPayment, getVat, loadReceipt, setVat, reactivateOrg, sendReceipt, suspendOrg, todayStr, type Gateway, type JekoCreds } from './billing'
 import { buildReceiptPdf } from './pdf'
 import { priceFor } from '../../shared/pricing'
 import { clearSetting, getSettings, setSetting, SETTING_KEYS, type SettingKey } from './secrets'
@@ -400,6 +400,17 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     } catch { return c.json({ error: 'jeko_unreachable_or_refused' }, 502) }
   })
 
+  /* ---------- TVA sur les abonnements (activable) ---------- */
+  app.get('/api/operator/vat-settings', ...op, async (c) => c.json(await getVat(db)))
+  app.put('/api/operator/vat-settings', ...op, async (c) => {
+    const who = c.get('who')
+    const parsed = z.object({ enabled: z.boolean(), rate: z.number().min(0).max(100) }).safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) return c.json({ error: 'invalid' }, 400)
+    await setVat(db, parsed.data)
+    await audit(NIL, who.userId, 'operator.vat_settings.update', undefined, 'vat', parsed.data)
+    return c.json({ ok: true, ...(await getVat(db)) })
+  })
+
   /* ---------- finances : encaissé, en attente, reste à payer ---------- */
   app.get('/api/operator/finance', ...op, async (c) => {
     const today = todayStr()
@@ -452,9 +463,11 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     const org = (await db.query('select 1 from organisations where id = $1 and kind = \'client\'', [pid(c)])).rows[0]
     if (!plan || !org) return c.json({ error: 'not_found' }, 404)
     const id = randomUUID()
-    const q = priceFor(plan.priceMonthly, parsed.data.months)
-    await db.query(`insert into payments (id, org_id, plan, months, amount, list_amount, discount_pct, status, source, reference, note, created_by) values ($1,$2,$3,$4,$5,$6,$7,'pending','manual',$8,$9,$10)`,
-      [id, pid(c), plan.code, parsed.data.months, parsed.data.amount ?? q.total, q.list, parsed.data.amount === undefined ? q.discountPct : 0, `MAN-${id.slice(0, 8).toUpperCase()}`, parsed.data.note || null, who.userId])
+    const vat = await getVat(db)
+    const q = priceFor(plan.priceMonthly, parsed.data.months, vat.enabled ? vat.rate : 0)
+    const custom = parsed.data.amount !== undefined // montant saisi à la main : ni remise ni TVA ajoutées
+    await db.query(`insert into payments (id, org_id, plan, months, amount, list_amount, discount_pct, vat_rate, vat_amount, status, source, reference, note, created_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending','manual',$10,$11,$12)`,
+      [id, pid(c), plan.code, parsed.data.months, parsed.data.amount ?? q.ttc, q.list, custom ? 0 : q.discountPct, custom ? 0 : q.vatRate, custom ? 0 : q.vat, `MAN-${id.slice(0, 8).toUpperCase()}`, parsed.data.note || null, who.userId])
     const r = await applyPayment(db, id)
     if (r.applied) await sendReceipt(db, mailer, config, id).catch(() => {})
     await audit(pid(c), who.userId, 'operator.payment.manual', undefined, id, { plan: plan.code, months: parsed.data.months })

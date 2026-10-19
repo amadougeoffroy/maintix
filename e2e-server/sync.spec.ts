@@ -427,6 +427,23 @@ test.describe.serial('mode serveur', () => {
     if (process.env.SHOTS) await payer.page.screenshot({ path: 'docs/screenshots/49-choix-offre.png', fullPage: true })
     await payer.ctx.close()
 
+    // TVA optionnelle : activée par l'opérateur, elle s'ajoute au total et le détail HT / TVA / TTC apparaît
+    await page.getByLabel('Appliquer la TVA aux abonnements').check()
+    await page.getByLabel(/Taux de TVA/).fill('18')
+    await page.getByRole('button', { name: 'Enregistrer la TVA' }).click()
+    await expect(page.locator('.toast-item', { hasText: 'TVA de 18 % appliquée' })).toBeVisible()
+    const payerVat = await freshLogin(browser, 'dg@cliente.test')
+    await payerVat.page.goto('/#/office/settings/abonnement')
+    await payerVat.page.getByRole('radio', { name: /Pro/ }).click()
+    await payerVat.page.getByRole('radio', { name: '3 mois' }).click()
+    await expect(payerVat.page.getByText('TVA 18 %')).toBeVisible()
+    await expect(payerVat.page.getByText('Total TTC à payer')).toBeVisible()
+    await expect(payerVat.page.getByRole('button', { name: /Payer 318 600 FCFA avec Jèko/ })).toBeVisible() // 270 000 HT + 48 600 de TVA
+    await payerVat.ctx.close()
+    await page.getByLabel('Appliquer la TVA aux abonnements').uncheck()
+    await page.getByRole('button', { name: 'Enregistrer la TVA' }).click()
+    await expect(page.locator('.toast-item', { hasText: 'TVA désactivée' })).toBeVisible()
+
     // facturation de la plateforme : montants en FCFA
     await page.getByRole('tab', { name: 'Usage et facturation' }).click()
     await expect(page.getByText('35 000 FCFA').first()).toBeVisible()

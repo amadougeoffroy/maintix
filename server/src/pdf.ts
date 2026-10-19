@@ -285,6 +285,8 @@ export function buildInvoicePdf(d: InvoiceData): Promise<Buffer> {
 export interface ReceiptData {
   receiptNumber: string; orgName: string; planName: string; months: number; amount: number; listAmount: number; discountPct: number
   source: 'jeko' | 'manual'; method: string | null; reference: string; paidAt: string; periodStart: string; periodEnd: string
+  /** TVA : taux (0 = sans TVA) et montant ; `amount` est le total payé (TTC) */
+  vatRate: number; vatAmount: number
   legal: { name?: string; email?: string; phone?: string; address?: string; registration?: string }
   appUrl: string
   compress?: boolean
@@ -328,11 +330,16 @@ export function buildReceiptPdf(d: ReceiptData): Promise<Buffer> {
     y = Math.max(doc.y, y + 14) + 6
     doc.moveTo(L, y - 3).lineTo(L + W, y - 3).lineWidth(0.4).strokeColor(C.line).stroke()
   }
-  row(`Abonnement Maintix — ${d.planName} — ${d.months} mois`, fcfaFr(d.listAmount))
-  if (d.discountPct > 0) row(`Remise de durée (${d.discountPct} %)`, `- ${fcfaFr(d.listAmount - d.amount)}`, false, C.ok)
+  const ht = d.amount - d.vatAmount
+  row(`Abonnement Maintix — ${d.planName} — ${d.months} mois${d.vatRate > 0 ? ' (HT)' : ''}`, fcfaFr(d.listAmount))
+  if (d.discountPct > 0) row(`Remise de durée (${d.discountPct} %)`, `- ${fcfaFr(d.listAmount - ht)}`, false, C.ok)
+  if (d.vatRate > 0) {
+    row('Total HT', fcfaFr(ht), true)
+    row(`TVA ${String(d.vatRate).replace('.', ',')} %`, fcfaFr(d.vatAmount))
+  }
   y += 6
   doc.rect(L + W - 250, y - 4, 250, 30).fill(C.bg)
-  doc.font('Helvetica-Bold').fontSize(12).fillColor(C.ink).text('Total payé', L + W - 240, y + 4, { width: 110 }).text(fcfaFr(d.amount), L + W - 130, y + 4, { width: 122, align: 'right' })
+  doc.font('Helvetica-Bold').fontSize(12).fillColor(C.ink).text(d.vatRate > 0 ? 'Total TTC payé' : 'Total payé', L + W - 240, y + 4, { width: 110 }).text(fcfaFr(d.amount), L + W - 130, y + 4, { width: 122, align: 'right' })
   y += 44
   doc.font('Helvetica-Bold').fontSize(11).fillColor(C.ok).text('ACQUITTÉ', L, y)
   y += 22

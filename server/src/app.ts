@@ -15,7 +15,7 @@ import type { Mailer } from './mailer'
 import { checkWrite, COLLECTIONS, docKey, type Collection, type Doc } from './rules'
 import { buildInvoicePdf, buildReportPdf } from './pdf'
 import { registerOperatorRoutes, loadOrgs } from './operator'
-import { applyPayment, jekoGateway, loadReceipt, MONTHS_CHOICES, PAY_METHODS, sendReceipt, verifyJekoSignature, type Gateway, type JekoCreds } from './billing'
+import { applyPayment, getVat, jekoGateway, loadReceipt, MONTHS_CHOICES, PAY_METHODS, sendReceipt, verifyJekoSignature, type Gateway, type JekoCreds } from './billing'
 import { buildReceiptPdf } from './pdf'
 import { DISCOUNT_PCT, priceFor } from '../../shared/pricing'
 import { getSettings } from './secrets'
@@ -749,11 +749,11 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     const org = (await db.query<{ plan: string; ends: string | null; trial: string | null; status: string; reason: string | null; code: string | null }>(
       `select plan, to_char(subscription_ends_on, 'YYYY-MM-DD') as ends, to_char(trial_ends_on, 'YYYY-MM-DD') as trial, status, suspended_reason as reason, suspended_reason_code as code from organisations where id = $1`, [who.orgId])).rows[0]
     const plans = (await loadPlans(db)).filter((p) => !p.archived && p.priceMonthly > 0)
-    const payments = (await db.query(`select id, plan, months, amount, list_amount as "listAmount", discount_pct as "discountPct", receipt_number as "receiptNumber", status, source, method, reference, created_at as "createdAt", paid_at as "paidAt", period_end as "periodEnd" from payments where org_id = $1 order by created_at desc limit 30`, [who.orgId])).rows
+    const payments = (await db.query(`select id, plan, months, amount, list_amount as "listAmount", discount_pct as "discountPct", vat_amount as "vatAmount", receipt_number as "receiptNumber", status, source, method, reference, created_at as "createdAt", paid_at as "paidAt", period_end as "periodEnd" from payments where org_id = $1 order by created_at desc limit 30`, [who.orgId])).rows
     return c.json({
       online: !!(await jekoCreds()), canPay: who.role === 'admin' && (who.orgStatus === 'active' || who.payable),
       current: { plan: org.plan, endsOn: org.ends, trialEndsOn: org.trial, status: org.status, suspension: org.status === 'suspended' ? { code: org.code, detail: org.reason, payable: who.payable } : null },
-      plans, months: MONTHS_CHOICES, discounts: DISCOUNT_PCT, methods: PAY_METHODS.map(([code, label]) => ({ code, label })), payments,
+      plans, months: MONTHS_CHOICES, discounts: DISCOUNT_PCT, vat: await getVat(db), methods: PAY_METHODS.map(([code, label]) => ({ code, label })), payments,
     })
   })
   app.post('/api/billing/checkout', requireAuth, requireRole('admin'), async (c) => {
@@ -768,14 +768,15 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     if (!creds) return c.json({ error: 'payments_unavailable' }, 503)
     const id = randomUUID()
     const reference = `MTX-${id.slice(0, 8).toUpperCase()}`
-    const q = priceFor(plan.priceMonthly, parsed.data.months) // remise de durée : 6 mois -10 %, 12 mois -20 %
-    const amount = q.total
-    await db.query(`insert into payments (id, org_id, plan, months, amount, list_amount, discount_pct, method, reference, created_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [id, who.orgId, plan.code, parsed.data.months, amount, q.list, q.discountPct, parsed.data.method, reference, who.userId])
+    const vat = await getVat(db)
+    const q = priceFor(plan.priceMonthly, parsed.data.months, vat.enabled ? vat.rate : 0) // remise de durée : 6 mois -10 %, 12 mois -20 % ; TVA en option
+    const amount = q.ttc
+    await db.query(`insert into payments (id, org_id, plan, months, amount, list_amount, discount_pct, vat_rate, vat_amount, method, reference, created_by) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, [id, who.orgId, plan.code, parsed.data.months, amount, q.list, q.discountPct, q.vatRate, q.vat, parsed.data.method, reference, who.userId])
     try {
       const r = await gateway(creds).createPayment({ reference, amount, method: parsed.data.method, successUrl: `${config.appUrl}/#/billing/return?payment=${id}`, errorUrl: `${config.appUrl}/#/billing/return?payment=${id}&failed=1` })
       await db.query('update payments set provider_id = $2, redirect_url = $3 where id = $1', [id, r.providerId, r.redirectUrl])
       await audit(who.orgId, who.userId, 'payment.checkout', undefined, id, { plan: plan.code, months: parsed.data.months, amount })
-      return c.json({ ok: true, paymentId: id, redirectUrl: r.redirectUrl, amount, listAmount: q.list, discountPct: q.discountPct })
+      return c.json({ ok: true, paymentId: id, redirectUrl: r.redirectUrl, amount, listAmount: q.list, discountPct: q.discountPct, vatRate: q.vatRate, vatAmount: q.vat })
     } catch (e) {
       await db.query(`update payments set status = 'failed', note = $2 where id = $1`, [id, String(e).slice(0, 200)])
       logger.log('error', 'payment_provider_error', { error: String(e) })

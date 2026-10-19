@@ -91,6 +91,8 @@ test('clavier : lien d’évitement et focus déplacé à chaque changement d’
   await loginAs(page, /Moussa/)
   await page.waitForTimeout(600) // laisse la session s'enregistrer localement
   await page.reload() // repart d'un focus neuf : le point de départ de la navigation séquentielle est le début de page
+  await page.getByRole('button', { name: 'Aller au contenu' }).waitFor() // l'application est rendue avant de naviguer au clavier (sinon le Tab part d'un document vide)
+  await page.waitForLoadState('networkidle')
   // le premier Tab entre dans le document ; le lien d'évitement doit être le premier élément focalisable
   await page.keyboard.press(TAB)
   if ((await page.evaluate(() => document.activeElement?.tagName)) === 'BODY') await page.keyboard.press(TAB)
@@ -102,7 +104,7 @@ test('clavier : lien d’évitement et focus déplacé à chaque changement d’
   // au clavier, chaque contrôle de la barre d'onglets reçoit un anneau de focus visible
   await page.goto('/#/tech')
   let outline = 'none'
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 60; i++) { // le nombre de contrôles avant la barre d'onglets dépend des missions du jour
     await page.keyboard.press(TAB)
     const info = await page.evaluate(() => { const el = document.activeElement as HTMLElement; return { text: el?.textContent ?? '', outline: getComputedStyle(el).outlineStyle, width: getComputedStyle(el).outlineWidth } })
     if (info.text.includes('Urgences')) { outline = `${info.outline} ${info.width}`; break }

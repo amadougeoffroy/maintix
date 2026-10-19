@@ -1,3 +1,4 @@
+import { orgIdentityLines, orgPayment } from '../../../shared/orgIds'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../../api'
 import { actions, byId, runtime, useData } from '../../store'
@@ -74,7 +75,7 @@ export default function InvoiceDetail() {
       <div className="no-print"><History collection="invoices" id={inv.id} /></div>
 
       <article className="paper">
-        <div className="paper-head"><div><strong style={{ fontSize: '1.1rem' }}>{org?.legalName ?? 'Votre entreprise'}</strong><div className="small" style={{ fontWeight: 400 }}>{org?.address}<br />{org?.siret && <>SIRET {org.siret} · </>}{org?.vatNumber && <>TVA {org.vatNumber}</>}</div></div><span style={{ fontSize: '1.3rem' }}>{inv.status === 'brouillon' ? 'PROFORMA' : 'FACTURE'}<br /><span style={{ fontSize: '.9rem', color: '#0f766e' }}>{inv.number ?? ''}</span></span></div>
+        <div className="paper-head"><div><strong style={{ fontSize: '1.1rem' }}>{org?.legalName ?? 'Votre entreprise'}</strong><div className="small" style={{ fontWeight: 400 }}>{org?.address}{orgIdentityLines(org).map((l) => <span key={l}><br />{l}</span>)}</div></div><span style={{ fontSize: '1.3rem' }}>{inv.status === 'brouillon' ? 'PROFORMA' : 'FACTURE'}<br /><span style={{ fontSize: '.9rem', color: '#0f766e' }}>{inv.number ?? ''}</span></span></div>
         <p><strong>Facturé à :</strong> {client?.name}{client?.contact ? ` · ${client.contact}` : ''}</p>
         <p className="small">{inv.issuedAt && <>Émise le {fmtDateLong(inv.issuedAt)} · </>}{inv.dueAt && <>Échéance le {fmtDateLong(inv.dueAt)}</>}{inv.periodStart && <> · Période du {fmtDateLong(inv.periodStart)} au {fmtDateLong(inv.periodEnd!)}</>}</p>
         <table style={{ marginTop: 10 }}>
@@ -88,7 +89,7 @@ export default function InvoiceDetail() {
         </table>
         {inv.status === 'payee' && <p style={{ color: '#166534', fontWeight: 700 }}>Acquittée le {fmtDateLong(inv.paidAt!)}</p>}
         {inv.note && <p>{inv.note}</p>}
-        {org?.iban && <p className="small">Règlement par virement — IBAN {org.iban} — référence {inv.number ?? ''}</p>}
+        {orgPayment(org) && <p className="small">Règlement : {orgPayment(org)} — référence {inv.number ?? ''}</p>}
         {org?.legalFooter && <p className="small" style={{ color: '#555' }}>{org.legalFooter}</p>}
       </article>
     </div>

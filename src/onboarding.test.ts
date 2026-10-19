@@ -21,11 +21,11 @@ describe('premiers pas', () => {
     expect(steps.find((x) => x.key === 'install')!.done).toBe(true)
     expect(steps.find((x) => x.key === 'install')!.manual).toBe('installDone')
   })
-  it('l’étape entreprise exige raison sociale ET SIRET', () => {
+  it('l’étape entreprise exige raison sociale ET un RCCM (ou un n° de compte contribuable)', () => {
     const s = emptyState()
-    s.settings = [{ id: 'org', legalName: 'ACME', siret: '', vatNumber: '', iban: '', email: '', phone: '', legalFooter: '', paymentDays: 30, vatRate: 20, address: '' }]
+    s.settings = [{ id: 'org', legalName: 'ACME', rccm: '', taxId: '', email: '', phone: '', legalFooter: '', paymentDays: 30, vatRate: 20, address: '' }]
     expect(gettingStartedSteps(s, {}).find((x) => x.key === 'company')!.done).toBe(false)
-    s.settings[0].siret = '123 456 789 00012'
+    s.settings[0].rccm = 'CI-ABJ-2020-B-12345'
     expect(gettingStartedSteps(s, {}).find((x) => x.key === 'company')!.done).toBe(true)
   })
 })

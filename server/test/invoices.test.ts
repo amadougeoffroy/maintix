@@ -92,10 +92,12 @@ describe('facture figée', () => {
 describe('PDF et envoi', () => {
   it('génère le PDF avec numéro, montants TTC et mentions légales', async () => {
     const f = { ...draft('f1'), status: 'emise', number: 'FAC-2026-0007', issuedAt: '2026-03-01', dueAt: '2026-04-15' }
-    const pdf = await buildInvoicePdf({ invoice: f, client: { name: 'Syndic Les Lilas', email: 'a@b.test' }, settings: { legalName: 'Ascenseurs Dupont SAS', iban: 'FR76 0000', legalFooter: 'Pénalités de retard : 3 fois le taux légal.', siret: '123' }, appUrl: 'https://x', compress: false })
+    const pdf = await buildInvoicePdf({ invoice: f, client: { name: 'Syndic Les Lilas', email: 'a@b.test' }, settings: { legalName: 'Ascenseurs Dupont SAS', bankDetails: 'RIB CI000 0000 · Wave 07 00 00 00 00', rccm: 'CI-ABJ-2020-B-12345', taxId: '1234567 A', taxRegime: 'Réel normal', legalFooter: 'Pénalités de retard : 3 fois le taux légal.' }, appUrl: 'https://x', compress: false })
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-')
     const text = pdfText(pdf)
-    for (const needle of ['FACTURE', 'FAC-2026-0007', 'Syndic Les Lilas', 'Contrat janvier', '216 000 FCFA', 'IBAN FR76', 'Pénalités de retard']) expect(text).toContain(needle)
+    expect(text).not.toContain('IBAN')
+    expect(text).not.toContain('SIRET')
+    for (const needle of ['FACTURE', 'FAC-2026-0007', 'Syndic Les Lilas', 'Contrat janvier', '216 000 FCFA', 'Règlement', 'RIB CI000 0000', 'Wave 07', 'RCCM CI-ABJ-2020-B-12345', 'N° CC 1234567 A', 'Réel normal', 'Pénalités de retard']) expect(text).toContain(needle)
   })
   it('sert le PDF au bureau et au client concerné, jamais un brouillon, jamais à un autre client', async () => {
     await push(admin, [{ collection: 'invoices', id: 'f1', data: draft('f1') }, { collection: 'invoices', id: 'f2', data: draft('f2') }])

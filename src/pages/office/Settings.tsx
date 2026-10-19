@@ -5,6 +5,7 @@ import { api, ApiError, type Member } from '../../api'
 import { actions, certStatus, runtime, useData } from '../../store'
 import type { OrgSettings } from '../../types'
 import { guardAdd, limitDialog } from '../../limits'
+import { DEFAULT_VAT_RATE, orgPayment, orgRccm, orgTaxId } from '../../../shared/orgIds'
 import { clearOrgData } from '../../session'
 import { PayPanel } from '../../components/PayPanel'
 import { PlanCard } from '../../components/PlanCard'
@@ -52,25 +53,30 @@ function Users() {
   )
 }
 
+/** Reprend les anciens champs (SIRET, TVA, IBAN) dans les nouveaux, pour les données déjà saisies. */
+const withCurrentFields = (o: OrgSettings): OrgSettings => ({ ...o, rccm: orgRccm(o), taxId: orgTaxId(o), taxRegime: o.taxRegime ?? '', bankDetails: orgPayment(o) })
+const withoutLegacyFields = (o: OrgSettings): OrgSettings => { const { siret: _s, vatNumber: _v, iban: _i, ...rest } = o; return rest }
+
 function OrgForm() {
   const s = useData()
-  const base: OrgSettings = { id: 'org', legalName: '', address: '', siret: '', vatNumber: '', iban: '', email: '', phone: '', legalFooter: 'En cas de retard de paiement : pénalités de retard exigibles dès le lendemain de l’échéance et indemnité forfaitaire de recouvrement.', paymentDays: 30, vatRate: 20 }
+  const base: OrgSettings = { id: 'org', legalName: '', address: '', rccm: '', taxId: '', taxRegime: '', bankDetails: '', email: '', phone: '', legalFooter: 'Tout retard de paiement entraîne l’application de pénalités de retard à compter du lendemain de la date d’échéance.', paymentDays: 30, vatRate: DEFAULT_VAT_RATE }
   const [f, setF] = useState<OrgSettings>(s.settings[0] ?? base)
   const [saved, setSaved] = useState(false)
   const [dirty, setDirty] = useState(false)
   // les réglages arrivent de la synchronisation (ou d'un changement d'entreprise) : on les reprend tant que l'utilisateur n'a rien modifié
-  useEffect(() => { if (!dirty && s.settings[0]) setF(s.settings[0]) }, [s.settings, dirty])
+  useEffect(() => { if (!dirty && s.settings[0]) setF(withCurrentFields(s.settings[0])) }, [s.settings, dirty])
   const F = (k: keyof OrgSettings, label: string, props: Record<string, unknown> = {}) => (
     <label className="field">{label}<input value={String(f[k] ?? '')} onChange={(e) => { setSaved(false); setDirty(true); setF({ ...f, [k]: props.type === 'number' ? +e.target.value : e.target.value }) }} {...props} /></label>
   )
   return (
-    <form className="card stack" onSubmit={(e) => { e.preventDefault(); actions.upsertSettings(f); setSaved(true); setDirty(false); feedback.toast('Informations de l’entreprise enregistrées.') }}>
+    <form className="card stack" onSubmit={(e) => { e.preventDefault(); actions.upsertSettings(withoutLegacyFields(f)); setSaved(true); setDirty(false); feedback.toast('Informations de l’entreprise enregistrées.') }}>
       <h2>Entreprise et facturation</h2>
       <p className="small muted">Ces informations figurent sur vos factures. Vérifiez les mentions légales avec votre expert-comptable.</p>
       <div className="grid2">
-        {F('legalName', 'Raison sociale', { required: true })}{F('siret', 'SIRET')}{F('vatNumber', 'N° de TVA intracommunautaire')}{F('iban', 'IBAN')}
+        {F('legalName', 'Raison sociale', { required: true })}{F('rccm', 'RCCM (Registre du Commerce)', { placeholder: 'CI-ABJ-2020-B-12345' })}{F('taxId', 'N° de compte contribuable (CC)', { placeholder: '1234567 A' })}{F('taxRegime', 'Régime d’imposition', { placeholder: 'Réel normal, synthétique…' })}
         {F('email', 'E-mail', { type: 'email' })}{F('phone', 'Téléphone')}{F('paymentDays', 'Délai de paiement (jours)', { type: 'number', min: 0 })}{F('vatRate', 'TVA par défaut (%)', { type: 'number', step: '0.1' })}
       </div>
+      {F('bankDetails', 'Coordonnées de paiement (RIB, Wave, Orange Money…)', { placeholder: 'RIB CI000 00000 00000000000 00 · Wave 07 00 00 00 00' })}
       {F('address', 'Adresse')}
       <label className="field">Mentions de pied de facture<textarea value={f.legalFooter} onChange={(e) => { setSaved(false); setDirty(true); setF({ ...f, legalFooter: e.target.value }) }} /></label>
       <div className="row"><button className="btn primary">Enregistrer</button>{saved && <span role="status" className="small">Enregistré.</span>}</div>

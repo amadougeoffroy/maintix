@@ -5,6 +5,7 @@ import { Badge } from '../../components/ui'
 import { Icon } from '../../components/Icon'
 import { feedback } from '../../feedback'
 import { contractStatus } from '../../contracts'
+import { DEFAULT_VAT_RATE } from '../../../shared/orgIds'
 import { draftFromContract, draftFromQuote, fec, salesJournalCsv, STATUS_LABEL, totals, unbilledPeriods } from '../../invoicing'
 import { issueInvoice } from '../../invoice-actions'
 import { fcfa, fmtDate, today, uid } from '../../util'
@@ -25,7 +26,7 @@ export default function Invoices() {
   const nav = useNavigate()
   const [filter, setFilter] = useState<Filter>('toutes')
   const [year, setYear] = useState(new Date().getFullYear())
-  const vat = s.settings[0]?.vatRate ?? 20
+  const vat = s.settings[0]?.vatRate ?? DEFAULT_VAT_RATE
   const on = today()
 
   const list = [...s.invoices]
@@ -92,9 +93,9 @@ export default function Invoices() {
         <div className="row wrap">
           <label className="row small">Exercice <input type="number" style={{ width: 100 }} value={year} onChange={(e) => setYear(+e.target.value || year)} /></label>
           <button className="btn sm" onClick={() => download(`journal-ventes-${year}.csv`, salesJournalCsv(s.invoices.filter((i) => i.issuedAt?.startsWith(String(year))), s.clients), 'text/csv;charset=utf-8')}><Icon n="import" /> Journal des ventes (CSV)</button>
-          <button className="btn sm" onClick={() => download(`FEC-${year}.txt`, fec(s.invoices, s.clients, year), 'text/plain;charset=utf-8')}><Icon n="import" /> FEC {year}</button>
+          <button className="btn sm" onClick={() => download(`ecritures-comptables-${year}.txt`, fec(s.invoices, s.clients, year), 'text/plain;charset=utf-8')}><Icon n="import" /> Écritures comptables {year}</button>
         </div>
-        <p className="small muted">Le FEC reprend les comptes par défaut (411 clients, 706 prestations, 44571 TVA collectée, 512 banque) : à faire valider par votre expert-comptable avant tout usage fiscal.{!runtime.server && ' Mode démonstration : numérotation locale à cet appareil.'}</p>
+        <p className="small muted">Les écritures comptables reprennent les comptes SYSCOHADA par défaut (411 clients, 706 services vendus, 4431 TVA facturée sur ventes, 521 banque) : à faire valider par votre expert-comptable avant tout usage fiscal.{!runtime.server && ' Mode démonstration : numérotation locale à cet appareil.'}</p>
       </section>
     </div>
   )

@@ -1,3 +1,4 @@
+import { DEFAULT_VAT_RATE } from '../../../shared/orgIds'
 import { useSearchParams } from 'react-router-dom'
 import { actions, byId, useData } from '../../store'
 import { Badge } from '../../components/ui'
@@ -7,11 +8,11 @@ import type { Quote } from '../../types'
 import { Icon } from '../../components/Icon'
 
 export const quoteTotal = (q: Quote) => q.lines.reduce((t, l) => t + l.qty * l.unit, 0)
-const TVA = 0.2
 
 export default function Quotes() {
   const s = useData()
   const [sp] = useSearchParams()
+  const vatRate = s.settings[0]?.vatRate ?? DEFAULT_VAT_RATE
   const openId = sp.get('open')
   const list = [...s.quotes].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   return (
@@ -28,7 +29,7 @@ export default function Quotes() {
           <details key={q.id} className="card" open={q.id === openId}>
             <summary className="row between wrap" style={{ cursor: 'pointer' }}>
               <strong>{c.name} · {e.label}</strong>
-              <span className="row"><Badge tone={q.status === 'accepte' ? 'ok' : q.status === 'envoye' ? 'brand' : undefined}>{q.status === 'accepte' ? 'Accepté' : q.status === 'envoye' ? 'Envoyé' : 'Brouillon'}</Badge><strong>{fcfa(ht * (1 + TVA))} TTC</strong></span>
+              <span className="row"><Badge tone={q.status === 'accepte' ? 'ok' : q.status === 'envoye' ? 'brand' : undefined}>{q.status === 'accepte' ? 'Accepté' : q.status === 'envoye' ? 'Envoyé' : 'Brouillon'}</Badge><strong>{fcfa(ht + Math.round((ht * vatRate) / 100))} TTC</strong></span>
             </summary>
             <div className="stack" style={{ marginTop: 12 }}>
               <p className="small muted">Créé le {fmtDateLong(q.createdAt)}</p>
@@ -44,7 +45,7 @@ export default function Quotes() {
                     </tr>
                   ))}
                 </tbody>
-                <tfoot><tr><td colSpan={3}>Total HT / TVA 20 %</td><td>{fcfa(ht)} / {fcfa(ht * TVA)}</td></tr></tfoot>
+                <tfoot><tr><td colSpan={3}>Total HT / TVA {vatRate} %</td><td>{fcfa(ht)} / {fcfa(Math.round((ht * vatRate) / 100))}</td></tr></tfoot>
               </table></div>
               <div className="row wrap">
                 {editable && <button className="btn sm" onClick={() => actions.updateQuote(q.id, { lines: [...q.lines, { label: 'Nouvelle ligne', qty: 1, unit: 0 }] })}>+ Ligne</button>}

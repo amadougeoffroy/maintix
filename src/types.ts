@@ -154,9 +154,18 @@ export interface OrgSettings {
   id: 'org'
   legalName: string
   address: string
-  siret: string
-  vatNumber: string
-  iban: string
+  /** RCCM (Registre du Commerce et du Crédit Mobilier) */
+  rccm?: string
+  /** numéro de compte contribuable (CC) */
+  taxId?: string
+  /** régime d'imposition (ex. réel normal, impôt synthétique) */
+  taxRegime?: string
+  /** coordonnées de paiement : RIB, Wave, Orange Money… */
+  bankDetails?: string
+  /** anciens champs (SIRET, TVA intracommunautaire, IBAN) : encore lus pour les données déjà saisies */
+  siret?: string
+  vatNumber?: string
+  iban?: string
   email: string
   phone: string
   /** mentions de pied de facture (pénalités, indemnité de recouvrement…) */

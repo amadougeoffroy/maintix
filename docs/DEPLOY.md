@@ -49,7 +49,7 @@ Les utilisateurs des entreprises ne peuvent pas créer d'entreprise.
 1. Ouvrir `https://maintix.mondomaine.fr/#/setup`.
 2. Saisir nom de l'entreprise, votre nom, votre e-mail et le `BOOTSTRAP_TOKEN`.
 3. Ouvrir le lien reçu par e-mail → vous êtes administrateur.
-4. *Réglages* : renseigner **Entreprise et facturation** (raison sociale, SIRET, TVA, IBAN, mentions légales), inviter techniciens, bureau et clients (portail). *Importer le parc* (Excel, CSV ou copier-coller) pour charger vos appareils.
+4. *Réglages* : renseigner **Entreprise et facturation** (raison sociale, RCCM, n° de compte contribuable, régime d'imposition, coordonnées de paiement, mentions légales), inviter techniciens, bureau et clients (portail). *Importer le parc* (Excel, CSV ou copier-coller) pour charger vos appareils.
 5. Chaque technicien : *Profil → Alertes d'astreinte* → activer les notifications (sur iPhone : ajouter d'abord Maintix à l'écran d'accueil, iOS 16.4+) et saisir son numéro pour les SMS.
 6. Recommandé : retirer `BOOTSTRAP_TOKEN` ensuite (l'installation est de toute façon refusée dès qu'une organisation existe).
 
@@ -109,3 +109,6 @@ Un plafond vide = illimité : jamais bloquant.
 ## 7. Supprimer une entreprise, vider des données
 - **Supprimer une entreprise et toutes ses données** : console → carte de l'entreprise → **Supprimer…** → retaper le nom exact. Sont effacés définitivement : comptes (ceux qui n'appartiennent à aucune autre entreprise), clients, appareils, missions, rapports, factures, photos et signatures, paiements enregistrés (le total encaissé diminue) et journal. Une trace « operator.org.delete » reste dans le journal de la plateforme. Pour couper l'accès en gardant les données : suspension.
 - **Vider les données d'une entreprise** (par exemple après les données de démonstration) : Réglages → Aide et données → **Vider les données**, puis taper SUPPRIMER (administrateur). Les comptes, réglages et techniciens liés à un compte sont conservés ; les autres appareils reçoivent les suppressions à leur prochaine synchronisation ; la numérotation des factures repart de zéro. Un opérateur peut le faire dans une entreprise via **Ouvrir l'entreprise**.
+
+## 8. Adaptation à la Côte d'Ivoire
+Identifiants d'entreprise : **RCCM**, **n° de compte contribuable (CC)**, **régime d'imposition** et **coordonnées de paiement** (RIB, Wave, Orange Money…) à la place de SIRET/TVA intracommunautaire/IBAN ; ils figurent sur les factures (écran et PDF). Les anciennes valeurs déjà saisies restent lues et sont reprises dans les nouveaux champs à la prochaine modification des réglages. TVA par défaut : **18 %** (modifiable dans Réglages ; les factures déjà créées gardent leur taux). Export comptable avec les comptes SYSCOHADA. Données de démonstration situées à Abidjan.

@@ -3,6 +3,7 @@ import { addDays, addMonths, today, uid } from './util'
 
 export { lineTotal, totals } from '../shared/money'
 import { totals } from '../shared/money'
+import { DEFAULT_VAT_RATE } from '../shared/orgIds'
 
 export const STATUS_LABEL: Record<Invoice['status'], string> = { brouillon: 'Brouillon', emise: 'Émise', payee: 'Payée', annulee: 'Annulée' }
 
@@ -29,10 +30,10 @@ export function issueLocal(inv: Invoice, all: Invoice[], settings: Pick<OrgSetti
 }
 
 /* ---------- création ---------- */
-export function draftFromQuote(q: Quote, vatRate = 20, on = today()): Invoice {
+export function draftFromQuote(q: Quote, vatRate = DEFAULT_VAT_RATE, on = today()): Invoice {
   return { id: uid('f'), clientId: q.clientId, kind: 'devis', quoteId: q.id, lines: q.lines.map((l) => ({ ...l })), vatRate, status: 'brouillon', createdAt: on }
 }
-export function draftFromContract(c: Contract, periodStart: string, months: number, appareils: number, vatRate = 20, on = today()): Invoice {
+export function draftFromContract(c: Contract, periodStart: string, months: number, appareils: number, vatRate = DEFAULT_VAT_RATE, on = today()): Invoice {
   const periodEnd = addDays(addMonths(periodStart, months), -1)
   return {
     id: uid('f'), clientId: c.clientId, kind: 'contrat', contractId: c.id, periodStart, periodEnd,
@@ -73,8 +74,8 @@ export function salesJournalCsv(invoices: Invoice[], clients: Client[]): string 
 const FEC_COLS = ['JournalCode', 'JournalLib', 'EcritureNum', 'EcritureDate', 'CompteNum', 'CompteLib', 'CompAuxNum', 'CompAuxLib', 'PieceRef', 'PieceDate', 'EcritureLib', 'Debit', 'Credit', 'EcritureLet', 'DateLet', 'ValidDate', 'Montantdevise', 'Idevise']
 const letter = (n: number) => { let s = ''; do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1 } while (n >= 0); return s }
 
-/** Fichier des Écritures Comptables (format FEC, séparateur tabulation) : journal de ventes VE et journal de banque BQ.
- *  Comptes par défaut : 411 clients, 706 prestations, 44571 TVA collectée, 512 banque. À valider avec l'expert-comptable. */
+/** Écritures comptables (fichier à 18 colonnes, séparateur tabulation) : journal de ventes VE et journal de banque BQ.
+ *  Comptes SYSCOHADA par défaut : 411 clients, 706 services vendus, 4431 TVA facturée sur ventes, 521 banque. À valider avec l'expert-comptable. */
 export function fec(invoices: Invoice[], clients: Client[], year: number): string {
   const lines: string[][] = []
   let num = 0
@@ -89,13 +90,13 @@ export function fec(invoices: Invoice[], clients: Client[], year: number): strin
     const paid = i.status === 'payee' && i.paidAt?.startsWith(String(year))
     const lt = paid ? letter(let_++) : ''
     num += 1
-    row('VE', 'Journal des ventes', num, i.issuedAt!, '411000', 'Clients', aux, i.number!, i.issuedAt!, `Facture ${i.number} ${cl?.name ?? ''}`, t.ttc, 0, lt, paid ? i.paidAt! : '')
-    row('VE', 'Journal des ventes', num, i.issuedAt!, '706000', 'Prestations de services', null, i.number!, i.issuedAt!, `Facture ${i.number} ${cl?.name ?? ''}`, 0, t.ht)
-    if (t.vat) row('VE', 'Journal des ventes', num, i.issuedAt!, '445710', 'TVA collectée', null, i.number!, i.issuedAt!, `Facture ${i.number} ${cl?.name ?? ''}`, 0, t.vat)
+    row('VE', 'Journal des ventes', num, i.issuedAt!, '411100', 'Clients', aux, i.number!, i.issuedAt!, `Facture ${i.number} ${cl?.name ?? ''}`, t.ttc, 0, lt, paid ? i.paidAt! : '')
+    row('VE', 'Journal des ventes', num, i.issuedAt!, '706000', 'Services vendus', null, i.number!, i.issuedAt!, `Facture ${i.number} ${cl?.name ?? ''}`, 0, t.ht)
+    if (t.vat) row('VE', 'Journal des ventes', num, i.issuedAt!, '443100', 'TVA facturée sur ventes', null, i.number!, i.issuedAt!, `Facture ${i.number} ${cl?.name ?? ''}`, 0, t.vat)
     if (paid) {
       num += 1
-      row('BQ', 'Journal de banque', num, i.paidAt!, '512000', 'Banque', null, i.number!, i.paidAt!, `Règlement ${i.number} ${cl?.name ?? ''}`, t.ttc, 0)
-      row('BQ', 'Journal de banque', num, i.paidAt!, '411000', 'Clients', aux, i.number!, i.paidAt!, `Règlement ${i.number} ${cl?.name ?? ''}`, 0, t.ttc, lt, i.paidAt!)
+      row('BQ', 'Journal de banque', num, i.paidAt!, '521000', 'Banque', null, i.number!, i.paidAt!, `Règlement ${i.number} ${cl?.name ?? ''}`, t.ttc, 0)
+      row('BQ', 'Journal de banque', num, i.paidAt!, '411100', 'Clients', aux, i.number!, i.paidAt!, `Règlement ${i.number} ${cl?.name ?? ''}`, 0, t.ttc, lt, i.paidAt!)
     }
   }
   return [FEC_COLS, ...lines].map((r) => r.join('\t')).join('\r\n') + '\r\n'

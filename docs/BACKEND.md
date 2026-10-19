@@ -31,7 +31,7 @@ SHA-256 d'un JSON **canonique** (`shared/canonical.ts`) recalculé par le serveu
 ### Factures
 - Brouillon libre (synchronisé) ; **l'émission passe par `POST /api/invoices/:id/issue`** : numéro `FAC-AAAA-NNNN` attribué atomiquement (compteur par entreprise et année, **sans trou** même en émissions simultanées), date d'émission, échéance.
 - Une facture émise est **figée** (lignes, numéro, client, TVA, dates) ; seuls paiement, note et annulation évoluent ; jamais supprimée. Un brouillon ne peut pas être « émis » ni numéroté par un envoi direct.
-- PDF (`GET /api/invoices/:id/pdf`) et envoi e-mail avec pièce jointe (`POST /api/invoices/:id/send`). Exports client : journal des ventes CSV et **FEC** (à valider par l'expert-comptable).
+- PDF (`GET /api/invoices/:id/pdf`) et envoi e-mail avec pièce jointe (`POST /api/invoices/:id/send`). Exports client : journal des ventes CSV et **écritures comptables** (comptes SYSCOHADA : 411, 706, 4431, 521, à valider avec votre expert-comptable).
 
 ## Fichiers (photos, signatures)
 `PUT /api/files/:sha256` : le serveur vérifie l'empreinte, le type (JPEG/PNG/WebP) et la taille (10 Mo) ; stockage Postgres (`bytea`), isolé par entreprise, lecture `immutable`. Un client ne lit que les fichiers de ses rapports clôturés. Le client envoie les fichiers **avant** les documents qui les référencent.

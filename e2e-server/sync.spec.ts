@@ -380,6 +380,23 @@ test.describe.serial('mode serveur', () => {
     const axe2 = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
     expect(axe2.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`)).toEqual([])
 
+    // l'administrateur voit, pour chaque offre, ses avantages (techniciens, appareils…) avant de payer
+    const payer = await freshLogin(browser, 'dg@cliente.test')
+    await payer.page.goto('/#/office/settings/abonnement')
+    const cards = payer.page.getByRole('radiogroup', { name: 'Offre' })
+    await expect(cards.getByRole('radio', { name: /Essentiel/ })).toContainText('Jusqu’à 2 techniciens'.replace('2', '5'))
+    await expect(cards.getByRole('radio', { name: /Pro/ })).toContainText('Jusqu’à 15 techniciens')
+    await expect(cards.getByRole('radio', { name: /Pro/ })).toContainText('Jusqu’à 500 appareils')
+    await cards.getByRole('radio', { name: /Pro/ }).click()
+    await payer.page.getByRole('radio', { name: '3 mois' }).click()
+    await expect(payer.page.getByText('Pro · 3 mois × 90 000 FCFA')).toBeVisible()
+    await expect(payer.page.getByRole('button', { name: /Payer 270 000 FCFA avec Jèko/ })).toBeVisible()
+    await payer.page.waitForTimeout(400)
+    const axe3 = await new AxeBuilder({ page: payer.page }).withTags(['wcag2a', 'wcag2aa']).analyze()
+    expect(axe3.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`)).toEqual([])
+    if (process.env.SHOTS) await payer.page.screenshot({ path: 'docs/screenshots/49-choix-offre.png', fullPage: true })
+    await payer.ctx.close()
+
     // facturation de la plateforme : montants en FCFA
     await page.getByRole('tab', { name: 'Usage et facturation' }).click()
     await expect(page.getByText('35 000 FCFA').first()).toBeVisible()
@@ -467,7 +484,7 @@ test.describe.serial('mode serveur', () => {
     await page.getByRole('link', { name: 'Ouvrir les réglages' }).click()
     const form = page.locator('form', { hasText: 'Entreprise et facturation' })
     await form.getByLabel('Raison sociale').fill('Entreprise Tuto SAS')
-    await form.getByLabel('SIRET').fill('123 456 789 00012')
+    await form.getByLabel(/RCCM/).fill('CI-ABJ-2020-B-12345')
     await form.getByRole('button', { name: 'Enregistrer' }).click()
     await page.goto('/#/office')
     await expect(page.locator('.gs .badge')).toHaveText('1/8')

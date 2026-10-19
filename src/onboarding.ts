@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { api } from './api'
 import type { State } from './types'
+import { orgRccm, orgTaxId } from '../shared/orgIds'
 
 export type OnboardingFlags = Partial<Record<'welcomeSeen' | 'gettingStartedHidden' | 'qrDone' | 'installDone' | 'teamDone', boolean>>
 interface Snap { loaded: boolean; flags: OnboardingFlags }
@@ -31,7 +32,7 @@ export interface Step { key: string; title: string; why: string; to: string; act
 export function gettingStartedSteps(s: State, flags: OnboardingFlags): Step[] {
   const o = s.settings[0]
   return [
-    { key: 'company', title: 'Renseigner votre entreprise', why: 'Raison sociale, SIRET, TVA, IBAN et mentions légales : ils figurent sur vos factures.', to: '/office/settings/entreprise', action: 'Ouvrir les réglages', done: !!(o?.legalName?.trim() && o?.siret?.trim()) },
+    { key: 'company', title: 'Renseigner votre entreprise', why: 'Raison sociale, RCCM, n° de compte contribuable, coordonnées de paiement et mentions légales : ils figurent sur vos factures.', to: '/office/settings/entreprise', action: 'Ouvrir les réglages', done: !!(o?.legalName?.trim() && (orgRccm(o) || orgTaxId(o))) },
     { key: 'team', title: 'Inviter votre équipe', why: 'Techniciens (application mobile) et bureau : chacun reçoit un lien de connexion par e-mail.', to: '/office/settings/equipe', action: 'Inviter', done: s.techs.some((t) => t.role === 'tech') || !!flags.teamDone },
     { key: 'clients', title: 'Ajouter vos clients et leurs sites', why: 'Syndics, bailleurs, hôtels… et les adresses où se trouvent les ascenseurs.', to: '/office/clients', action: 'Ajouter un client', done: s.clients.length > 0 && s.sites.length > 0 },
     { key: 'parc', title: 'Ajouter ou importer vos appareils', why: 'Un par un, ou en important un fichier Excel/CSV (ou un copier-coller).', to: '/office/import', action: 'Importer le parc', done: s.elevators.length > 0 },

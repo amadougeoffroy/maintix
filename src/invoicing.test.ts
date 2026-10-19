@@ -79,7 +79,7 @@ describe('exports comptables', () => {
     expect(bq).toHaveLength(2)
     const lettered = body.filter((r) => r[13]).length
     expect(lettered).toBe(2) // la ligne 411 de la vente et la ligne 411 du règlement portent le même lettrage
-    expect(body.filter((r) => r[4] === '445710')[0][12]).toBe('40000')
+    expect(body.filter((r) => r[4] === '443100')[0][12]).toBe('40000')
     expect(rows[1][3]).toBe('20260301')
   })
   it('FEC : ne contient que l’exercice demandé', () => {

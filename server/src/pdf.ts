@@ -1,3 +1,4 @@
+import { DEFAULT_VAT_RATE, orgIdentityLines, orgPayment } from '../../shared/orgIds'
 import PDFDocument from 'pdfkit'
 import logo from '../../brand/logo-data.json'
 import { MEASURES, ZONES } from '../../shared/checklist'
@@ -205,7 +206,7 @@ const dFr = (d?: string) => (d ? d.split('-').reverse().join('/') : '—')
 /** Facture PDF (A4). Montants recalculés par le serveur à partir des lignes. */
 export function buildInvoicePdf(d: InvoiceData): Promise<Buffer> {
   const { invoice: inv, client, settings: org = {} } = d
-  const t = totals({ lines: inv.lines ?? [], vatRate: Number(inv.vatRate ?? 20) })
+  const t = totals({ lines: inv.lines ?? [], vatRate: Number(inv.vatRate ?? DEFAULT_VAT_RATE) })
   const doc = new PDFDocument({ size: 'A4', margin: 48, bufferPages: true, compress: d.compress ?? true, info: { Title: `Facture ${inv.number ?? 'brouillon'}`, Author: String(org.legalName ?? 'Maintix') } })
   const chunks: Buffer[] = []
   doc.on('data', (b: Buffer) => chunks.push(b))
@@ -221,7 +222,7 @@ export function buildInvoicePdf(d: InvoiceData): Promise<Buffer> {
   // émetteur / destinataire
   let y = 44 + lh + 28
   doc.font('Helvetica-Bold').fontSize(10).fillColor(C.ink).text(String(org.legalName ?? ''), L, y, { width: W / 2 - 10 })
-  doc.font('Helvetica').fontSize(9).fillColor(C.muted).text([org.address, org.siret ? `SIRET ${org.siret}` : '', org.vatNumber ? `TVA ${org.vatNumber}` : '', org.email, org.phone].filter(Boolean).join('\n'), L, doc.y + 2, { width: W / 2 - 10 })
+  doc.font('Helvetica').fontSize(9).fillColor(C.muted).text([org.address, ...orgIdentityLines(org), org.email, org.phone].filter(Boolean).join('\n'), L, doc.y + 2, { width: W / 2 - 10 })
   const leftEnd = doc.y
   doc.rect(L + W / 2 + 10, y - 6, W / 2 - 10, 78).fill(C.bg)
   doc.font('Helvetica-Bold').fontSize(8).fillColor(C.muted).text('FACTURÉ À', L + W / 2 + 20, y, { width: W / 2 - 30 })
@@ -266,7 +267,7 @@ export function buildInvoicePdf(d: InvoiceData): Promise<Buffer> {
 
   y += 10
   doc.font('Helvetica').fontSize(9).fillColor(C.ink)
-  if (org.iban) { doc.font('Helvetica-Bold').text('Règlement par virement', L, y); doc.font('Helvetica').fillColor(C.muted).text(`IBAN ${org.iban}  ·  Référence : ${inv.number ?? ''}`, L, doc.y + 2, { width: W }); y = doc.y + 8 }
+  if (orgPayment(org)) { doc.font('Helvetica-Bold').text('Règlement', L, y); doc.font('Helvetica').fillColor(C.muted).text(`${orgPayment(org)}  ·  Référence : ${inv.number ?? ''}`, L, doc.y + 2, { width: W }); y = doc.y + 8 }
   if (inv.note) { doc.font('Helvetica').fontSize(9).fillColor(C.ink).text(String(inv.note), L, y, { width: W }); y = doc.y + 8 }
   if (org.legalFooter) doc.font('Helvetica').fontSize(7.5).fillColor(C.muted).text(String(org.legalFooter), L, Math.max(y + 6, doc.page.height - 120), { width: W })
 

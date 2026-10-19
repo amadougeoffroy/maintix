@@ -8,14 +8,14 @@ export function seed(): State {
     session: { role: null, techId: null, clientId: null },
     clients: [
       { id: 'c1', name: 'Syndic Résidence Les Lilas', kind: 'syndic', contact: 'Mme Bernard', email: 'syndic.lilas@example.com', phone: '01 23 45 67 89' },
-      { id: 'c2', name: 'Habitat Nord Bailleur', kind: 'bailleur', contact: 'M. Diallo', email: 'patrimoine@habitat-nord.example', phone: '03 20 00 00 00' },
+      { id: 'c2', name: 'Habitat Abidjan Bailleur', kind: 'bailleur', contact: 'M. Diallo', email: 'patrimoine@habitat-abidjan.example', phone: '+225 27 00 00 00 01' },
       { id: 'c3', name: 'Hôtel du Parc', kind: 'erp', contact: 'M. Lefèvre', email: 'direction@hotel-parc.example', phone: '04 70 00 00 00' },
     ],
     sites: [
-      { id: 's1', clientId: 'c1', name: 'Les Lilas – Bât. A', address: '12 rue des Lilas, 59000 Lille', access: 'Digicode 4521 · clé machinerie chez la gardienne (loge RDC)', risks: 'Machinerie en toiture : accès par échelle. Gaine peu profonde (cuvette 1,0 m).' },
-      { id: 's2', clientId: 'c1', name: 'Les Lilas – Bât. B', address: '14 rue des Lilas, 59000 Lille', access: 'Digicode 4521 · local technique au sous-sol, clé au bâtiment A', risks: 'Sous-sol sans réseau mobile.' },
-      { id: 's3', clientId: 'c2', name: 'Tour Habitat – 18 étages', address: '5 avenue de la Paix, 59100 Roubaix', access: 'Gardien sur place 7h–19h. Badge technicien à retirer.', risks: 'Travail en hauteur en machinerie haute. Deux ascenseurs, ne jamais les arrêter ensemble.' },
-      { id: 's4', clientId: 'c3', name: 'Hôtel du Parc', address: '2 place du Parc, 03200 Vichy', access: 'Accueil hôtel, demander M. Lefèvre.', risks: 'Clients dans les étages : intervention en horaires creux.' },
+      { id: 's1', clientId: 'c1', name: 'Les Lilas – Bât. A', address: 'Rue des Jardins, Cocody, Abidjan', access: 'Digicode 4521 · clé machinerie chez la gardienne (loge RDC)', risks: 'Machinerie en toiture : accès par échelle. Gaine peu profonde (cuvette 1,0 m).' },
+      { id: 's2', clientId: 'c1', name: 'Les Lilas – Bât. B', address: 'Rue des Jardins (bât. B), Cocody, Abidjan', access: 'Digicode 4521 · local technique au sous-sol, clé au bâtiment A', risks: 'Sous-sol sans réseau mobile.' },
+      { id: 's3', clientId: 'c2', name: 'Tour Habitat – 18 étages', address: 'Boulevard de la Paix, Plateau, Abidjan', access: 'Gardien sur place 7h–19h. Badge technicien à retirer.', risks: 'Travail en hauteur en machinerie haute. Deux ascenseurs, ne jamais les arrêter ensemble.' },
+      { id: 's4', clientId: 'c3', name: 'Hôtel du Parc', address: 'Place du Parc, Marcory, Abidjan', access: 'Accueil hôtel, demander M. Lefèvre.', risks: 'Clients dans les étages : intervention en horaires creux.' },
     ],
     elevators: [
       { id: 'e1', siteId: 's1', label: 'Ascenseur A1', brand: 'Schindler', model: '3300', serial: 'SCH-3300-4412', year: 2004, loadKg: 630, stops: 7, machineRoom: 'haut', status: 'ok', lastVisit: addDays(t, -28) },
@@ -53,7 +53,7 @@ export function seed(): State {
     ],
     quotes: [],
     invoices: [],
-    settings: [{ id: 'org', legalName: 'Ascenseurs Démo SAS', address: '10 rue de l’Industrie, 59000 Lille', siret: '123 456 789 00012', vatNumber: 'FR12 123456789', iban: 'FR76 3000 6000 0112 3456 7890 189', email: 'contact@demo.example', phone: '03 20 00 00 00', legalFooter: 'En cas de retard de paiement : pénalités au taux de 3 fois le taux d’intérêt légal et indemnité forfaitaire de recouvrement. Pas d’escompte pour paiement anticipé.', paymentDays: 30, vatRate: 20 }],
+    settings: [{ id: 'org', legalName: 'Ascenseurs Démo SAS', address: 'Zone industrielle de Yopougon, Abidjan', rccm: 'CI-ABJ-2019-B-12345', taxId: '1234567 A', taxRegime: 'Réel normal', bankDetails: 'RIB CI000 01234 012345678901 23 · Wave 07 00 00 00 00', email: 'contact@demo.example', phone: '+225 27 00 00 00 00', legalFooter: 'Tout retard de paiement entraîne l’application de pénalités de retard à compter du lendemain de la date d’échéance.', paymentDays: 30, vatRate: 18 }],
   }
 }
 

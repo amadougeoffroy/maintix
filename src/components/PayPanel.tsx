@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Check } from 'lucide-react'
 import { api, ApiError, type BillingOverview } from '../api'
 import { feedback } from '../feedback'
 import { fcfa, fmtDate } from '../util'
@@ -35,9 +36,23 @@ export function PayPanel({ compact = false }: { compact?: boolean }) {
           try { const r = await api.checkout({ plan, months, method }); window.location.href = r.redirectUrl }
           catch (x) { setBusy(false); feedback.toast(x instanceof ApiError && x.code === 'not_payable' ? 'Ce paiement ne peut pas lever la suspension : contactez Maintix.' : 'Le paiement n’a pas pu démarrer. Réessayez dans un instant.', 'error') }
         }}>
-          <label className="field">Offre
-            <select value={plan} onChange={(e) => setPlan(e.target.value)} required>{o.plans.map((p) => <option key={p.code} value={p.code}>{p.name} — {fcfa(p.priceMonthly)} / mois</option>)}</select>
-          </label>
+          <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
+            <legend className="small muted">Offre</legend>
+            <div className="plan-cards" role="radiogroup" aria-label="Offre">
+              {o.plans.map((p) => (
+                <button key={p.code} type="button" role="radio" aria-checked={plan === p.code} className={`plan-card ${plan === p.code ? 'on' : ''}`} onClick={() => setPlan(p.code)}>
+                  <span className="row between"><strong>{p.name}</strong>{o.current.plan === p.code && <Badge tone="brand">Offre actuelle</Badge>}</span>
+                  <span className="plan-price">{fcfa(p.priceMonthly)} <small>/ mois</small></span>
+                  <ul className="plan-perks">
+                    <li><Check size={15} aria-hidden="true" /> {p.maxTechs === null ? 'Techniciens illimités' : `Jusqu’à ${p.maxTechs} techniciens`}</li>
+                    <li><Check size={15} aria-hidden="true" /> {p.maxElevators === null ? 'Appareils illimités' : `Jusqu’à ${p.maxElevators} appareils`}</li>
+                    <li><Check size={15} aria-hidden="true" /> Visites sur mobile, rapports scellés, planning, factures</li>
+                    <li><Check size={15} aria-hidden="true" /> {p.overageMode === 'block' ? 'Plafonds fermes : changer d’offre pour en ajouter' : p.extraTechPrice || p.extraElevatorPrice ? `Au-delà : ${[p.extraTechPrice ? `${fcfa(p.extraTechPrice)} / technicien` : '', p.extraElevatorPrice ? `${fcfa(p.extraElevatorPrice)} / appareil` : ''].filter(Boolean).join(' · ')} par mois` : 'Ajouts possibles au-delà des plafonds'}</li>
+                  </ul>
+                </button>
+              ))}
+            </div>
+          </fieldset>
           <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
             <legend className="small muted">Durée</legend>
             <div className="seg" role="radiogroup" aria-label="Durée du paiement">
@@ -47,12 +62,17 @@ export function PayPanel({ compact = false }: { compact?: boolean }) {
           <label className="field">Moyen de paiement
             <select value={method} onChange={(e) => setMethod(e.target.value)}>{o.methods.map((m) => <option key={m.code} value={m.code}>{m.label}</option>)}</select>
           </label>
-          <div className="row between wrap"><span className="muted">Total à payer</span><strong style={{ fontSize: '1.3rem' }}>{fcfa(amount)}</strong></div>
+          {chosen && (
+            <div className="card stack" style={{ background: 'var(--surface-2)' }}>
+              <div className="row between wrap"><span className="muted">{chosen.name} · {months} mois × {fcfa(chosen.priceMonthly)}</span><strong style={{ fontSize: '1.3rem' }}>{fcfa(amount)}</strong></div>
+              <p className="small muted">Inclus : {chosen.maxTechs === null ? 'techniciens illimités' : `${chosen.maxTechs} techniciens`} et {chosen.maxElevators === null ? 'appareils illimités' : `${chosen.maxElevators} appareils`}.</p>
+            </div>
+          )}
           <button className="btn primary block" disabled={busy || !chosen}>{busy ? 'Redirection vers Jèko…' : `Payer ${fcfa(amount)} avec Jèko`}</button>
           <p className="small muted">Vous serez redirigé vers la page de paiement sécurisée de Jèko. L’accès est rétabli dès la confirmation du paiement.</p>
         </form>
       )}
-      {!compact && o.current.endsOn && <p className="small muted">Abonnement valable jusqu’au {fmtDate(o.current.endsOn)}.</p>}
+      {!compact && o.current.endsOn && <p className="small muted">Abonnement valable jusqu’au {fmtDate(o.current.endsOn)}</p>}
       {!compact && o.payments.length > 0 && (
         <div className="card stack">
           <h3>Vos paiements</h3>

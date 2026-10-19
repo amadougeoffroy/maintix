@@ -135,4 +135,4 @@ export function parseParc(text: string): ImportResult {
 
 export const TEMPLATE_CSV =
   'Client;Site;Adresse;Appareil;Marque;Modèle;N° série;Année;Charge (kg);Arrêts;Machinerie;Accès\n' +
-  'Syndic Les Tilleuls;Bât. A;3 rue des Tilleuls 59000 Lille;Ascenseur A1;Kone;MonoSpace;KON-0001;2011;630;6;sans local;Digicode 1234\n'
+  'Syndic Les Tilleuls;Bât. A;Rue des Tilleuls, Cocody, Abidjan;Ascenseur A1;Kone;MonoSpace;KON-0001;2011;630;6;sans local;Digicode 1234\n'

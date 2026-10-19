@@ -21,6 +21,7 @@ import { getPlan, loadPlans, planLimitBlock } from './plans'
 import type { Notifier } from './notify'
 import { Metrics, newRequestId, silentLogger, type Logger } from './observability'
 import { totals } from '../../shared/money'
+import { DEFAULT_VAT_RATE } from '../../shared/orgIds'
 import { emailParts, ROLE_LABEL, setEmailContact } from './emailTemplate'
 import { sealPayload } from '../../shared/canonical'
 
@@ -653,7 +654,7 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
       if (!cur) return { status: 404 as const }
       if (cur.status !== 'brouillon') return { status: 409 as const }
       const lines = (cur.lines as { qty: number; unit: number }[] | undefined) ?? []
-      if (!lines.length || totals({ lines, vatRate: Number(cur.vatRate ?? 20) }).ht <= 0) return { status: 422 as const }
+      if (!lines.length || totals({ lines, vatRate: Number(cur.vatRate ?? DEFAULT_VAT_RATE) }).ht <= 0) return { status: 422 as const }
       const settings = (await t.query<{ data: Doc }>(`select data from docs where org_id=$1 and collection='settings' and id='org'`, [who.orgId])).rows[0]?.data
       const today = new Date().toISOString().slice(0, 10)
       const year = Number(today.slice(0, 4))
@@ -691,7 +692,7 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     const to = parsed.data.to?.length ? parsed.data.to : b.client.email ? [String(b.client.email)] : []
     if (!to.length) return c.json({ error: 'no_recipient' }, 400)
     const pdf = await buildInvoicePdf({ ...b, appUrl: config.appUrl })
-    const t = totals({ lines: (b.invoice.lines as { qty: number; unit: number }[]) ?? [], vatRate: Number(b.invoice.vatRate ?? 20) })
+    const t = totals({ lines: (b.invoice.lines as { qty: number; unit: number }[]) ?? [], vatRate: Number(b.invoice.vatRate ?? DEFAULT_VAT_RATE) })
     await mailer.send({
       to,
       subject: `Facture ${b.invoice.number} – ${String(b.settings?.legalName ?? 'Maintix')}`,

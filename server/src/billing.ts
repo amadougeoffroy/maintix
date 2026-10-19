@@ -5,8 +5,9 @@ import type { Config } from './config'
 import { emailParts } from './emailTemplate'
 import type { Mailer } from './mailer'
 import { getPlan } from './plans'
+import { buildReceiptPdf } from './pdf'
 
-export const MONTHS_CHOICES = [1, 3, 6, 12] as const
+export { MONTHS_CHOICES } from '../../shared/pricing'
 export const PAY_METHODS = [['wave', 'Wave'], ['orange', 'Orange Money'], ['mtn', 'MTN MoMo'], ['moov', 'Moov Money'], ['djamo', 'Djamo']] as const
 
 export const todayStr = (now = Date.now()) => new Date(now).toISOString().slice(0, 10)
@@ -100,7 +101,10 @@ export async function applyPayment(db: Db, paymentId: string, today = todayStr()
     )).rows[0]
     const start = org.subscription_ends_on && org.subscription_ends_on > today ? org.subscription_ends_on : today
     const end = addMonths(start, p.months)
-    await t.query(`update payments set status='paid', paid_at=now(), period_start=$2, period_end=$3 where id=$1`, [p.id, start, end])
+    const year = Number(today.slice(0, 4))
+    const n = (await t.query<{ last: number }>(`insert into receipt_counters (year, last) values ($1, 1) on conflict (year) do update set last = receipt_counters.last + 1 returning last`, [year])).rows[0].last
+    const receipt = `REC-${year}-${String(n).padStart(4, '0')}` // séquence continue, attribuée au paiement
+    await t.query(`update payments set status='paid', paid_at=now(), period_start=$2, period_end=$3, receipt_number=$4 where id=$1`, [p.id, start, end, receipt])
     const plan = await getPlan(t, p.plan)
     await t.query(
       `update organisations set plan=$2, subscription_ends_on=$3, trial_ends_on=null,
@@ -170,4 +174,50 @@ export async function sendRenewalReminders(db: Db, mailer: Mailer, config: Confi
     sent.push({ org: o.name, kind })
   }
   return sent
+}
+
+/** Envoie le reçu PDF d'un paiement confirmé aux administrateurs de l'entreprise. */
+export async function sendReceipt(db: Db, mailer: Mailer, config: Config, paymentId: string) {
+  const r = await loadReceipt(db, paymentId)
+  if (!r) return false
+  const admins = (await db.query<{ email: string; full_name: string }>(`select u.email, m.full_name from members m join users u on u.id = m.user_id where m.org_id = $1 and m.role = 'admin'`, [r.orgId])).rows
+  const pdf = await buildReceiptPdf({ ...r.data, legal: config.legal, appUrl: config.appUrl })
+  const fr = (n: number) => `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} FCFA`
+  const d = r.data
+  for (const a of admins) {
+    await mailer.send({
+      to: a.email,
+      subject: `Reçu de paiement ${d.receiptNumber} : merci`,
+      ...emailParts({
+        preheader: `Votre paiement de ${fr(d.amount)} est bien reçu.`,
+        title: `Merci, ${a.full_name}`,
+        paragraphs: ['Nous avons bien reçu votre paiement : votre abonnement Maintix est à jour. Votre reçu est joint à ce message (PDF).'],
+        facts: [['Reçu', d.receiptNumber], ['Offre', `${d.planName} · ${d.months} mois`], ['Montant payé', fr(d.amount)], ['Valable jusqu’au', d.periodEnd.split('-').reverse().join('/')]],
+        button: { label: 'Accéder à la plateforme', url: `${config.appUrl}/#/` },
+      }, [{ filename: `recu-${d.receiptNumber}.pdf`, content: pdf, contentType: 'application/pdf' }]),
+    }).catch(() => {})
+  }
+  return true
+}
+
+/** Données d'un reçu (paiement confirmé uniquement). */
+export async function loadReceipt(db: Pick<Db, 'query'>, paymentId: string, orgId?: string) {
+  const p = (await db.query<{
+    id: string; org_id: string; org: string; plan: string; months: number; amount: number; list_amount: number | null; discount_pct: number; source: string; method: string | null
+    reference: string; receipt_number: string | null; paid_at: string; period_start: string; period_end: string
+  }>(
+    `select p.id, p.org_id, o.name as org, p.plan, p.months, p.amount, p.list_amount, p.discount_pct, p.source, p.method, p.reference, p.receipt_number, p.paid_at,
+            to_char(p.period_start, 'YYYY-MM-DD') as period_start, to_char(p.period_end, 'YYYY-MM-DD') as period_end
+       from payments p join organisations o on o.id = p.org_id where p.id = $1 and p.status = 'paid' and p.receipt_number is not null ${orgId ? 'and p.org_id = $2' : ''}`,
+    orgId ? [paymentId, orgId] : [paymentId],
+  )).rows[0]
+  if (!p) return null
+  const plan = await getPlan(db, p.plan)
+  return {
+    orgId: p.org_id,
+    data: {
+      receiptNumber: p.receipt_number!, orgName: p.org, planName: plan?.name ?? p.plan, months: p.months, amount: p.amount, listAmount: p.list_amount ?? p.amount, discountPct: p.discount_pct,
+      source: p.source as 'jeko' | 'manual', method: p.method, reference: p.reference, paidAt: new Date(p.paid_at).toISOString(), periodStart: p.period_start, periodEnd: p.period_end,
+    },
+  }
 }

@@ -312,13 +312,46 @@ function Plans({ plans, reload }: { plans: PlanPreset[]; reload: () => void }) {
 
 const PAY_STATUS: Record<string, [string, 'ok' | 'warn' | 'bad']> = { paid: ['Payé', 'ok'], pending: ['En attente', 'warn'], failed: ['Échec', 'bad'] }
 
+const PLAN_COLORS = ['#0f766e', '#f59e0b', '#2563eb', '#a855f7', '#dc2626', '#0891b2', '#65a30d']
+
+/** Encaissements par mois (12 derniers mois), empilés par offre, avec le détail chiffré pour les lecteurs d'écran. */
+function MonthlyByPlan({ m }: { m: FinanceView['monthly'] }) {
+  const amountOf = (month: string, plan: string) => m.cells.find((c) => c.month === month && c.plan === plan)?.amount ?? 0
+  const totals = m.months.map((month) => m.plans.reduce((t, p) => t + amountOf(month, p.code), 0))
+  const max = Math.max(1, ...totals)
+  const color = (i: number) => PLAN_COLORS[i % PLAN_COLORS.length]
+  return (
+    <section className="card stack">
+      <div className="row between wrap"><h2>Évolution des encaissements par offre</h2>{m.discounts > 0 && <span className="small muted">Remises de durée accordées : {fcfa(m.discounts)}</span>}</div>
+      <div className="row wrap" aria-hidden="true">{m.plans.map((p, i) => <span key={p.code} className="row small"><span className="swatch" style={{ background: color(i) }} />{p.name}</span>)}</div>
+      <div className="bars stacked" aria-hidden="true">
+        {m.months.map((month, mi) => (
+          <div key={month} className="bar-col" title={`${month} : ${fcfa(totals[mi])}`}>
+            <div className="bar-stack" style={{ height: `${totals[mi] ? Math.max(6, (totals[mi] / max) * 100) : 0}%` }}>
+              {m.plans.map((p, i) => amountOf(month, p.code) > 0 && <div key={p.code} style={{ flex: amountOf(month, p.code), background: color(i) }} />)}
+            </div>
+            <span className="small muted">{month.slice(5)}</span>
+          </div>
+        ))}
+      </div>
+      <details>
+        <summary>Voir le détail chiffré</summary>
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Détail des encaissements par mois"><table>
+          <caption className="sr-only">Encaissements par mois et par offre, en FCFA</caption>
+          <thead><tr><th scope="col">Mois</th>{m.plans.map((p) => <th key={p.code} scope="col">{p.name}</th>)}<th scope="col">Total</th></tr></thead>
+          <tbody>{m.months.map((month, mi) => <tr key={month}><th scope="row">{month}</th>{m.plans.map((p) => <td key={p.code}>{amountOf(month, p.code) ? fcfa(amountOf(month, p.code)) : '—'}</td>)}<td><strong>{totals[mi] ? fcfa(totals[mi]) : '—'}</strong></td></tr>)}</tbody>
+        </table></div>
+      </details>
+    </section>
+  )
+}
+
 function Finance({ plans }: { plans: PlanPreset[] }) {
   const [f, setF] = useState<FinanceView | null>(null)
   const [m, setM] = useState({ orgId: '', plan: '', months: '1', amount: '', note: '' })
   const load = useCallback(() => api.opFinance().then(setF).catch(() => feedback.toast('Chargement des finances impossible.', 'error')), [])
   useEffect(() => { void load() }, [load])
   if (!f) return <p className="muted">Chargement…</p>
-  const max = Math.max(1, ...f.collected.series.map((x) => x.amount))
   return (
     <div className="stack-lg">
       <div className="grid2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
@@ -330,18 +363,11 @@ function Finance({ plans }: { plans: PlanPreset[] }) {
       </div>
       <p className="small muted">« Reste à payer » : une mensualité estimée pour chaque entreprise dont l’essai ou l’abonnement est échu, ou suspendue pour impayé.</p>
 
-      {f.collected.series.length > 0 && (
-        <section className="card stack">
-          <h2>Encaissements des 12 derniers mois</h2>
-          <div className="bars" role="img" aria-label={`Encaissements par mois : ${f.collected.series.map((x) => `${x.month} ${fcfa(x.amount)}`).join(', ')}`}>
-            {f.collected.series.map((x) => <div key={x.month} className="bar-col" title={`${x.month} : ${fcfa(x.amount)}`}><div className="bar" style={{ height: `${Math.max(6, (x.amount / max) * 100)}%` }} /><span className="small muted">{x.month.slice(5)}</span></div>)}
-          </div>
-        </section>
-      )}
+      {f.monthly.plans.length > 0 && <MonthlyByPlan m={f.monthly} />}
 
       <section className="stack">
         <h2>Par entreprise</h2>
-        <div className="table-wrap"><table>
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Détail par entreprise"><table>
           <thead><tr><th>Entreprise</th><th>Offre</th><th>Échéance</th><th>Payé</th><th>En cours</th><th>Reste à payer</th></tr></thead>
           <tbody>{f.orgs.map((o) => (
             <tr key={o.orgId}>
@@ -359,8 +385,8 @@ function Finance({ plans }: { plans: PlanPreset[] }) {
         {f.recent.length === 0 && <p className="muted">Aucun paiement pour le moment.</p>}
         {f.recent.map((p) => (
           <div key={p.id} className="card row between wrap">
-            <div><strong>{p.org}</strong> <span className="small muted">· {p.plan} · {p.months} mois · {p.source === 'manual' ? 'hors ligne' : `Jèko${p.method ? ` (${p.method})` : ''}`}</span><p className="small muted">{when(p.paidAt ?? p.createdAt)} · réf. {p.reference}{p.note ? ` · ${p.note}` : ''}</p></div>
-            <div className="row wrap"><strong>{fcfa(p.amount)}</strong><Badge tone={PAY_STATUS[p.status][1]}>{PAY_STATUS[p.status][0]}</Badge>
+            <div><strong>{p.org}</strong> <span className="small muted">· {p.plan} · {p.months} mois · {p.source === 'manual' ? 'hors ligne' : `Jèko${p.method ? ` (${p.method})` : ''}`}</span><p className="small muted">{when(p.paidAt ?? p.createdAt)} · réf. {p.reference}{p.receiptNumber ? ` · reçu ${p.receiptNumber}` : ''}{p.note ? ` · ${p.note}` : ''}{(p.discountPct ?? 0) > 0 ? ` · remise ${p.discountPct} %` : ''}</p></div>
+            <div className="row wrap"><strong>{fcfa(p.amount)}</strong><Badge tone={PAY_STATUS[p.status][1]}>{PAY_STATUS[p.status][0]}</Badge>{p.status === 'paid' && p.receiptNumber && <a className="btn sm" href={`/api/operator/payments/${p.id}/receipt`} download aria-label={`Télécharger le reçu ${p.receiptNumber}`}>Reçu PDF</a>}
               {p.status === 'pending' && <button className="btn sm" onClick={async () => { if (!(await feedback.confirm({ title: 'Confirmer ce paiement ?', body: 'À faire uniquement après avoir vérifié la transaction dans votre tableau de bord Jèko (notification non reçue). L’abonnement sera prolongé.', confirmLabel: 'Confirmer le paiement', cancelLabel: 'Annuler' }))) return; try { await api.opConfirmPayment(p.id); feedback.toast('Paiement confirmé, abonnement prolongé.'); await load() } catch { feedback.toast('Confirmation impossible.', 'error') } }}>Marquer payé</button>}
             </div>
           </div>

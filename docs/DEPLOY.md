@@ -112,3 +112,8 @@ Un plafond vide = illimité : jamais bloquant.
 
 ## 8. Adaptation à la Côte d'Ivoire
 Identifiants d'entreprise : **RCCM**, **n° de compte contribuable (CC)**, **régime d'imposition** et **coordonnées de paiement** (RIB, Wave, Orange Money…) à la place de SIRET/TVA intracommunautaire/IBAN ; ils figurent sur les factures (écran et PDF). Les anciennes valeurs déjà saisies restent lues et sont reprises dans les nouveaux champs à la prochaine modification des réglages. TVA par défaut : **18 %** (modifiable dans Réglages ; les factures déjà créées gardent leur taux). Export comptable avec les comptes SYSCOHADA. Données de démonstration situées à Abidjan.
+
+## 9. Remises, reçus et suivi des encaissements
+- **Remises de durée** (paiement d'avance) : 6 mois −10 %, 12 mois −20 % (1 et 3 mois : plein tarif). Elles s'appliquent au paiement en ligne et aux paiements enregistrés hors ligne (sauf si un montant est saisi à la main). Les pourcentages sont dans `shared/pricing.ts`.
+- **Reçus PDF** : chaque paiement confirmé reçoit un numéro séquentiel `REC-AAAA-NNNN` et un reçu PDF (offre, période couverte, remise, total, moyen de paiement), envoyé par e-mail aux administrateurs de l'entreprise et téléchargeable depuis Réglages → Abonnement (« Reçu PDF ») et depuis la console, onglet Finances. L'émetteur est celui des variables `LEGAL_*`.
+- **Évolution des encaissements** : console → Finances → graphique des 12 derniers mois empilé par offre, détail chiffré par mois, total des remises accordées.

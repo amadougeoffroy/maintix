@@ -246,13 +246,13 @@ describe('finances de la console', () => {
     await dgB.post('/api/billing/checkout', { plan: 'essentiel', months: 1, method: 'wave' }) // en attente
     const f = await (await op.get('/api/operator/finance')).json()
     expect(f.currency).toBe('FCFA')
-    expect(f.collected.total).toBe(210000) // 35 000 × 6
-    expect(f.collected.thisMonth).toBe(210000)
+    expect(f.collected.total).toBe(189000) // 35 000 × 6 − 10 %
+    expect(f.collected.thisMonth).toBe(189000)
     expect(f.pending).toMatchObject({ amount: 35000, count: 1 })
     expect(f.outstanding).toMatchObject({ amount: 35000, orgs: 1 })
     const rowB = f.orgs.find((o: { name: string }) => o.name === 'Échue SA')
     expect(rowB).toMatchObject({ due: 35000, paid: 0, pending: 35000 })
-    expect(f.orgs.find((o: { name: string }) => o.name === 'Payée SA')).toMatchObject({ paid: 210000, due: 0 })
+    expect(f.orgs.find((o: { name: string }) => o.name === 'Payée SA')).toMatchObject({ paid: 189000, due: 0 })
     expect(f.recent.length).toBe(2)
   })
   it('un paiement en attente peut être confirmé à la main (rapprochement)', async () => {

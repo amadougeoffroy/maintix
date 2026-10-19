@@ -45,10 +45,11 @@ export interface OperatorOrg {
   suspension: { code: string | null; label: string | null; detail: string | null; payable: boolean } | null
 }
 export interface SuspensionReason { code: string; label: string; liftedByPayment: boolean; automatic: boolean }
-export interface PaymentRow { id: string; orgId?: string; org?: string; plan: string; months: number; amount: number; status: 'pending' | 'paid' | 'failed'; source: 'jeko' | 'manual'; method: string | null; reference: string; note?: string | null; createdAt: string; paidAt: string | null; periodEnd: string | null }
+export interface PaymentRow { listAmount?: number | null; discountPct?: number; receiptNumber?: string | null; id: string; orgId?: string; org?: string; plan: string; months: number; amount: number; status: 'pending' | 'paid' | 'failed'; source: 'jeko' | 'manual'; method: string | null; reference: string; note?: string | null; createdAt: string; paidAt: string | null; periodEnd: string | null }
 export interface FinanceView {
   currency: 'FCFA'
   collected: { total: number; thisMonth: number; series: { month: string; amount: number }[] }
+  monthly: { months: string[]; plans: { code: string; name: string }[]; cells: { month: string; plan: string; amount: number; n: number; discount: number }[]; discounts: number }
   pending: { amount: number; count: number }
   outstanding: { amount: number; orgs: number }
   upcoming30: { amount: number; orgs: number }
@@ -57,7 +58,7 @@ export interface FinanceView {
 }
 export interface PaymentSettings { provider: 'jeko'; webhookUrl: string; apiKeyId: string; storeId: string; apiKeyMasked: string | null; webhookSecretMasked: string | null; configured: boolean; webhookConfigured: boolean; encryptedWith: string }
 export interface BillingOverview {
-  online: boolean; canPay: boolean
+  online: boolean; canPay: boolean; discounts: Record<number, number>
   current: { plan: string; endsOn: string | null; trialEndsOn: string | null; status: string; suspension: { code: string | null; detail: string | null; payable: boolean } | null }
   plans: PlanPreset[]; months: number[]; methods: { code: string; label: string }[]; payments: PaymentRow[]
 }

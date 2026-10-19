@@ -7,7 +7,9 @@ import type { Config } from './config'
 import type { Db } from './db'
 import type { Mailer } from './mailer'
 import { estimateAmount, getPlan, loadPlans, type OrgOffer, type Usage } from './plans'
-import { applyPayment, reactivateOrg, suspendOrg, todayStr, type Gateway, type JekoCreds } from './billing'
+import { applyPayment, loadReceipt, reactivateOrg, sendReceipt, suspendOrg, todayStr, type Gateway, type JekoCreds } from './billing'
+import { buildReceiptPdf } from './pdf'
+import { priceFor } from '../../shared/pricing'
 import { clearSetting, getSettings, setSetting, SETTING_KEYS, type SettingKey } from './secrets'
 
 type Env = { Variables: { who: Principal } }
@@ -408,6 +410,19 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     const total = (await db.query<{ n: number }>(`select coalesce(sum(amount), 0)::int as n from payments where status = 'paid'`)).rows[0].n
     const thisMonth = (await db.query<{ n: number }>(`select coalesce(sum(amount), 0)::int as n from payments where status = 'paid' and to_char(paid_at, 'YYYY-MM') = $1`, [month])).rows[0].n
     const series = (await db.query<{ month: string; amount: number }>(`select to_char(paid_at, 'YYYY-MM') as month, sum(amount)::int as amount from payments where status = 'paid' and paid_at > now() - interval '12 months' group by 1 order by 1`)).rows
+    // encaissements des 12 derniers mois, par offre (mois sans paiement inclus : 12 colonnes consécutives)
+    const months: string[] = []
+    for (let i = 11; i >= 0; i--) { const d = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 - i, 1)); months.push(d.toISOString().slice(0, 7)) }
+    const cells = (await db.query<{ month: string; plan: string; amount: number; n: number; discount: number }>(
+      `select to_char(paid_at, 'YYYY-MM') as month, plan, sum(amount)::int as amount, count(*)::int as n, coalesce(sum(list_amount - amount), 0)::int as discount
+         from payments where status = 'paid' and to_char(paid_at, 'YYYY-MM') = any($1::text[]) group by 1, 2 order by 1, 2`, [months])).rows
+    const planNames = new Map((await loadPlans(db)).map((p) => [p.code, p.name]))
+    const monthly = {
+      months,
+      plans: [...new Set(cells.map((x) => x.plan))].map((code) => ({ code, name: planNames.get(code) ?? code })),
+      cells,
+      discounts: cells.reduce((t, x) => t + x.discount, 0),
+    }
     const in30 = new Date(Date.parse(today) + 30 * 86400_000).toISOString().slice(0, 10)
     const rows = orgs.map((o) => {
       const sub = o.offer.subscriptionEndsOn
@@ -416,11 +431,12 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
       const upcoming = !expired && !!sub && sub >= today && sub <= in30 ? o.estimate.amount : 0
       return { orgId: o.id, name: o.name, status: o.status, plan: o.offer.plan, endsOn: sub ?? (o.offer.plan === 'essai' ? o.offer.trialEndsOn : null), monthly: o.estimate.amount, paid: paidByOrg.get(o.id)?.total ?? 0, lastPaidAt: paidByOrg.get(o.id)?.last ?? null, pending: pendingByOrg.get(o.id)?.total ?? 0, due, upcoming }
     })
-    const recent = (await db.query(`select p.id, p.org_id as "orgId", o.name as org, p.plan, p.months, p.amount, p.status, p.source, p.method, p.reference, p.note, p.created_at as "createdAt", p.paid_at as "paidAt", p.period_end as "periodEnd"
+    const recent = (await db.query(`select p.id, p.org_id as "orgId", o.name as org, p.plan, p.months, p.amount, p.status, p.source, p.method, p.reference, p.note, p.list_amount as "listAmount", p.discount_pct as "discountPct", p.receipt_number as "receiptNumber", p.created_at as "createdAt", p.paid_at as "paidAt", p.period_end as "periodEnd"
       from payments p join organisations o on o.id = p.org_id order by p.created_at desc limit 60`)).rows
     return c.json({
       currency: 'FCFA',
       collected: { total, thisMonth, series },
+      monthly,
       pending: { amount: rows.reduce((t, r) => t + r.pending, 0), count: [...pendingByOrg.values()].reduce((t, r) => t + r.n, 0) },
       outstanding: { amount: rows.reduce((t, r) => t + r.due, 0), orgs: rows.filter((r) => r.due > 0).length },
       upcoming30: { amount: rows.reduce((t, r) => t + r.upcoming, 0), orgs: rows.filter((r) => r.upcoming > 0).length },
@@ -436,11 +452,19 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     const org = (await db.query('select 1 from organisations where id = $1 and kind = \'client\'', [pid(c)])).rows[0]
     if (!plan || !org) return c.json({ error: 'not_found' }, 404)
     const id = randomUUID()
-    await db.query(`insert into payments (id, org_id, plan, months, amount, status, source, reference, note, created_by) values ($1,$2,$3,$4,$5,'pending','manual',$6,$7,$8)`,
-      [id, pid(c), plan.code, parsed.data.months, parsed.data.amount ?? plan.priceMonthly * parsed.data.months, `MAN-${id.slice(0, 8).toUpperCase()}`, parsed.data.note || null, who.userId])
+    const q = priceFor(plan.priceMonthly, parsed.data.months)
+    await db.query(`insert into payments (id, org_id, plan, months, amount, list_amount, discount_pct, status, source, reference, note, created_by) values ($1,$2,$3,$4,$5,$6,$7,'pending','manual',$8,$9,$10)`,
+      [id, pid(c), plan.code, parsed.data.months, parsed.data.amount ?? q.total, q.list, parsed.data.amount === undefined ? q.discountPct : 0, `MAN-${id.slice(0, 8).toUpperCase()}`, parsed.data.note || null, who.userId])
     const r = await applyPayment(db, id)
+    if (r.applied) await sendReceipt(db, mailer, config, id).catch(() => {})
     await audit(pid(c), who.userId, 'operator.payment.manual', undefined, id, { plan: plan.code, months: parsed.data.months })
     return c.json({ ok: true, ...r, paymentId: id }, 201)
+  })
+  app.get('/api/operator/payments/:id/receipt', ...op, async (c) => {
+    const r = await loadReceipt(db, c.req.param('id') ?? '')
+    if (!r) return c.json({ error: 'not_found' }, 404)
+    const pdf = await buildReceiptPdf({ ...r.data, legal: config.legal, appUrl: config.appUrl })
+    return new Response(pdf, { headers: { 'content-type': 'application/pdf', 'content-disposition': `attachment; filename="recu-${r.data.receiptNumber}.pdf"`, 'cache-control': 'no-store' } })
   })
   /** Rapprochement : un paiement Jèko resté « en attente » (webhook non reçu) est confirmé à la main après vérification dans Jèko. */
   app.post('/api/operator/payments/:id/confirm', ...op, async (c) => {
@@ -448,6 +472,7 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     const p = (await db.query<{ org_id: string }>(`select org_id from payments where id = $1 and status = 'pending'`, [c.req.param('id') ?? ''])).rows[0]
     if (!p) return c.json({ error: 'not_found' }, 404)
     const r = await applyPayment(db, c.req.param('id') ?? '')
+    if (r.applied) await sendReceipt(db, mailer, config, c.req.param('id') ?? '').catch(() => {})
     await audit(p.org_id, who.userId, 'operator.payment.confirm', undefined, c.req.param('id'))
     return c.json({ ok: true, ...r })
   })

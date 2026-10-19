@@ -354,3 +354,9 @@ html { scroll-behavior: smooth; } @media (prefers-reduced-motion: reduce) { html
 .el-check { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--muted); background: var(--surface); color: var(--brand-ink); font-weight: 800; font-size: .9rem; }
 .el-tile.on .el-check { background: var(--brand); border-color: var(--brand); }
 .el-body { display: grid; gap: 2px; min-width: 0; } .el-body strong { overflow-wrap: anywhere; }
+
+.disc-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: #166534; color: #fff; font-size: .72rem; font-weight: 800; }
+.seg button.on .disc-tag { background: #fff; color: #166534; }
+.swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+.bars.stacked .bar-col { grid-template-rows: 1fr auto; }
+.bar-stack { align-self: end; width: 100%; max-width: 40px; display: flex; flex-direction: column-reverse; border-radius: 6px 6px 0 0; overflow: hidden; }

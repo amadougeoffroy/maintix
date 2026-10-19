@@ -281,3 +281,64 @@ export function buildInvoicePdf(d: InvoiceData): Promise<Buffer> {
   doc.end()
   return done
 }
+
+export interface ReceiptData {
+  receiptNumber: string; orgName: string; planName: string; months: number; amount: number; listAmount: number; discountPct: number
+  source: 'jeko' | 'manual'; method: string | null; reference: string; paidAt: string; periodStart: string; periodEnd: string
+  legal: { name?: string; email?: string; phone?: string; address?: string; registration?: string }
+  appUrl: string
+  compress?: boolean
+}
+const METHOD_LABEL: Record<string, string> = { wave: 'Wave', orange: 'Orange Money', mtn: 'MTN MoMo', moov: 'Moov Money', djamo: 'Djamo' }
+
+/** Reçu de paiement d'abonnement (A4) : numéro séquentiel, émetteur, période couverte, remise éventuelle. */
+export function buildReceiptPdf(d: ReceiptData): Promise<Buffer> {
+  const doc = new PDFDocument({ size: 'A4', margin: 48, compress: d.compress ?? true, info: { Title: `Reçu ${d.receiptNumber}`, Author: d.legal.name ?? 'Maintix' } })
+  const chunks: Buffer[] = []
+  doc.on('data', (b: Buffer) => chunks.push(b))
+  const done = new Promise<Buffer>((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))))
+  const L = 48
+  const W = doc.page.width - 96
+  const lh = drawLogo(doc, L, 44, 110)
+  doc.font('Helvetica-Bold').fontSize(20).fillColor(C.ink).text('REÇU DE PAIEMENT', L, 44, { width: W, align: 'right' })
+  doc.font('Helvetica-Bold').fontSize(12).fillColor(C.teal).text(d.receiptNumber, L, 70, { width: W, align: 'right' })
+  doc.moveTo(L, 44 + lh + 12).lineTo(L + W, 44 + lh + 12).lineWidth(2.5).strokeColor(C.teal).stroke()
+
+  let y = 44 + lh + 28
+  doc.font('Helvetica-Bold').fontSize(10).fillColor(C.ink).text(d.legal.name ?? 'Maintix', L, y, { width: W / 2 - 10 })
+  doc.font('Helvetica').fontSize(9).fillColor(C.muted).text([d.legal.address, d.legal.registration ? `RCCM ${d.legal.registration}` : '', d.legal.email, d.legal.phone].filter(Boolean).join('\n') || 'Plateforme Maintix', L, doc.y + 2, { width: W / 2 - 10 })
+  const leftEnd = doc.y
+  doc.rect(L + W / 2 + 10, y - 6, W / 2 - 10, 62).fill(C.bg)
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(C.muted).text('REÇU DE', L + W / 2 + 20, y, { width: W / 2 - 30 })
+  doc.font('Helvetica-Bold').fontSize(11).fillColor(C.ink).text(d.orgName, L + W / 2 + 20, doc.y + 2, { width: W / 2 - 30 })
+  y = Math.max(leftEnd, y + 62) + 18
+
+  const meta: [string, string][] = [['Payé le', dFr(d.paidAt.slice(0, 10))], ['Période couverte', `${dFr(d.periodStart)} au ${dFr(d.periodEnd)}`], ['Référence', d.reference]]
+  meta.forEach(([k, v], i) => {
+    doc.font('Helvetica').fontSize(8.5).fillColor(C.muted).text(k, L + i * 170, y, { width: 160 })
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(C.ink).text(v, L + i * 170, y + 12, { width: 160 })
+  })
+  y += 44
+
+  doc.rect(L, y, W, 20).fill(C.ink)
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#ffffff').text('DÉSIGNATION', L + 8, y + 6, { width: 330 }).text('MONTANT', L + W - 130, y + 6, { width: 122, align: 'right' })
+  y += 28
+  const row = (label: string, amount: string, bold = false, color: string = C.ink) => {
+    doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(10).fillColor(color).text(label, L + 8, y, { width: 330 }).text(amount, L + W - 130, y, { width: 122, align: 'right' })
+    y = Math.max(doc.y, y + 14) + 6
+    doc.moveTo(L, y - 3).lineTo(L + W, y - 3).lineWidth(0.4).strokeColor(C.line).stroke()
+  }
+  row(`Abonnement Maintix — ${d.planName} — ${d.months} mois`, fcfaFr(d.listAmount))
+  if (d.discountPct > 0) row(`Remise de durée (${d.discountPct} %)`, `- ${fcfaFr(d.listAmount - d.amount)}`, false, C.ok)
+  y += 6
+  doc.rect(L + W - 250, y - 4, 250, 30).fill(C.bg)
+  doc.font('Helvetica-Bold').fontSize(12).fillColor(C.ink).text('Total payé', L + W - 240, y + 4, { width: 110 }).text(fcfaFr(d.amount), L + W - 130, y + 4, { width: 122, align: 'right' })
+  y += 44
+  doc.font('Helvetica-Bold').fontSize(11).fillColor(C.ok).text('ACQUITTÉ', L, y)
+  y += 22
+  doc.font('Helvetica').fontSize(9).fillColor(C.muted).text(`Moyen de paiement : ${d.source === 'jeko' ? `${METHOD_LABEL[d.method ?? ''] ?? d.method ?? 'mobile'} (paiement en ligne Jèko)` : 'virement ou espèces, enregistré par l’équipe Maintix'}`, L, y, { width: W })
+  doc.text('Ce reçu atteste du paiement de l’abonnement ci-dessus. Montants en francs CFA (FCFA).', L, doc.y + 6, { width: W })
+  doc.text(`${d.appUrl}`, L, doc.y + 6, { width: W })
+  doc.end()
+  return done
+}

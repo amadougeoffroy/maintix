@@ -3,6 +3,7 @@ import { Check } from 'lucide-react'
 import { api, ApiError, type BillingOverview } from '../api'
 import { feedback } from '../feedback'
 import { fcfa, fmtDate } from '../util'
+import { priceFor } from '../../shared/pricing'
 import { Badge } from './ui'
 
 const PLAN_STATUS: Record<string, string> = { pending: 'En attente', paid: 'Payé', failed: 'Échec' }
@@ -17,7 +18,8 @@ export function PayPanel({ compact = false }: { compact?: boolean }) {
   useEffect(() => { api.billing().then((v) => { setO(v); setPlan((p) => p || (v.plans.some((x) => x.code === v.current.plan) ? v.current.plan : v.plans[0]?.code ?? '')) }).catch(() => {}) }, [])
   if (!o) return null
   const chosen = o.plans.find((p) => p.code === plan)
-  const amount = chosen ? chosen.priceMonthly * months : 0
+  const quote = chosen ? priceFor(chosen.priceMonthly, months) : null
+  const amount = quote?.total ?? 0
   const sus = o.current.suspension
   const blocked = sus && !sus.payable
   return (
@@ -56,7 +58,7 @@ export function PayPanel({ compact = false }: { compact?: boolean }) {
           <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
             <legend className="small muted">Durée</legend>
             <div className="seg" role="radiogroup" aria-label="Durée du paiement">
-              {o.months.map((m) => <button key={m} type="button" role="radio" aria-checked={months === m} className={months === m ? 'ok on' : ''} onClick={() => setMonths(m)}>{m} mois</button>)}
+              {o.months.map((m) => <button key={m} type="button" role="radio" aria-checked={months === m} className={months === m ? 'ok on' : ''} onClick={() => setMonths(m)}>{m} mois{(o.discounts[m] ?? 0) > 0 && <span className="disc-tag">−{o.discounts[m]} %</span>}</button>)}
             </div>
           </fieldset>
           <label className="field">Moyen de paiement
@@ -64,7 +66,8 @@ export function PayPanel({ compact = false }: { compact?: boolean }) {
           </label>
           {chosen && (
             <div className="card stack" style={{ background: 'var(--surface-2)' }}>
-              <div className="row between wrap"><span className="muted">{chosen.name} · {months} mois × {fcfa(chosen.priceMonthly)}</span><strong style={{ fontSize: '1.3rem' }}>{fcfa(amount)}</strong></div>
+              <div className="row between wrap"><span className="muted">{chosen.name} · {months} mois × {fcfa(chosen.priceMonthly)}{quote && quote.discountPct > 0 ? <> = <s>{fcfa(quote.list)}</s></> : null}</span><strong style={{ fontSize: '1.3rem' }}>{fcfa(amount)}</strong></div>
+              {quote && quote.discountPct > 0 && <p className="small" style={{ color: 'var(--ok)', fontWeight: 700 }}>Remise de {quote.discountPct} % : vous économisez {fcfa(quote.discount)}.</p>}
               <p className="small muted">Inclus : {chosen.maxTechs === null ? 'techniciens illimités' : `${chosen.maxTechs} techniciens`} et {chosen.maxElevators === null ? 'appareils illimités' : `${chosen.maxElevators} appareils`}.</p>
             </div>
           )}
@@ -79,7 +82,7 @@ export function PayPanel({ compact = false }: { compact?: boolean }) {
           {o.payments.map((p) => (
             <div key={p.id} className="row between wrap small">
               <span>{fmtDate(p.createdAt)} · {p.plan} · {p.months} mois</span>
-              <span className="row"><strong>{fcfa(p.amount)}</strong><Badge tone={p.status === 'paid' ? 'ok' : p.status === 'failed' ? 'bad' : 'warn'}>{PLAN_STATUS[p.status]}</Badge></span>
+              <span className="row"><strong>{fcfa(p.amount)}</strong>{(p.discountPct ?? 0) > 0 && <span className="disc-tag">−{p.discountPct} %</span>}<Badge tone={p.status === 'paid' ? 'ok' : p.status === 'failed' ? 'bad' : 'warn'}>{PLAN_STATUS[p.status]}</Badge>{p.status === 'paid' && p.receiptNumber && <a className="btn sm" href={`/api/billing/payments/${p.id}/receipt`} download aria-label={`Télécharger le reçu ${p.receiptNumber}`}>Reçu PDF</a>}</span>
             </div>
           ))}
         </div>

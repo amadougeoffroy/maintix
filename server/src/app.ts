@@ -17,7 +17,7 @@ import { buildInvoicePdf, buildReportPdf } from './pdf'
 import { registerOperatorRoutes, loadOrgs } from './operator'
 import { applyPayment, jekoGateway, MONTHS_CHOICES, PAY_METHODS, verifyJekoSignature, type Gateway, type JekoCreds } from './billing'
 import { getSettings } from './secrets'
-import { getPlan, loadPlans } from './plans'
+import { getPlan, loadPlans, planLimitBlock } from './plans'
 import type { Notifier } from './notify'
 import { Metrics, newRequestId, silentLogger, type Logger } from './observability'
 import { totals } from '../../shared/money'
@@ -375,6 +375,10 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
       const cl = await db.query('select 1 from docs where org_id=$1 and collection=$2 and id=$3 and not deleted', [who.orgId, 'clients', clientId ?? ''])
       if (!cl.rows.length) return c.json({ error: 'client_unknown' }, 400)
     }
+    if (role === 'tech') {
+      const blocked = await planLimitBlock(db, who.orgId, 'techs')
+      if (blocked) return c.json({ error: 'plan_limit', ...blocked }, 403)
+    }
     const dup = await db.query(`select 1 from members m join users u on u.id=m.user_id where m.org_id=$1 and u.email=$2`, [who.orgId, email])
     if (dup.rows.length) return c.json({ error: 'already_member' }, 409)
     const elsewhere = await db.query(`select 1 from members m join users u on u.id=m.user_id where m.org_id<>$1 and u.email=$2`, [who.orgId, email])
@@ -430,6 +434,14 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
           out.push({ collection: col, id: op.id, ok: false, reason: verdict.reason, doc: cur })
           await audit(who.orgId, who.userId, 'sync.rejected', col, op.id, { reason: verdict.reason }, t)
           continue
+        }
+        if (col === 'elevators' && op.data && (!cur || cur.deleted)) {
+          const blocked = await planLimitBlock(t, who.orgId, 'elevators')
+          if (blocked) {
+            out.push({ collection: col, id: op.id, ok: false, reason: 'plan_limit_elevators' })
+            await audit(who.orgId, who.userId, 'sync.rejected', col, op.id, { reason: 'plan_limit_elevators', ...blocked }, t)
+            continue
+          }
         }
         const unchanged = cur && op.data && !cur.deleted && canonicalJson(cur.data) === canonicalJson(op.data)
         if (unchanged) { out.push({ collection: col, id: op.id, ok: true, seq: cur.seq }); continue }

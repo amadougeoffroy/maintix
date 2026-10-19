@@ -30,7 +30,8 @@ export function PlanCard() {
         <Bar label="Techniciens" value={p.usage.techs} max={p.offer.maxTechs} />
         <Bar label="Appareils" value={p.usage.elevators} max={p.offer.maxElevators} />
         {p.offer.priceMonthly > 0 && <p className="small muted">Forfait : {fcfa(p.offer.priceMonthly)} par mois{p.estimate.amount > p.estimate.base ? `, soit ${fcfa(p.estimate.amount)} avec les dépassements actuels.` : '.'}</p>}
-        {(p.flags.overTechs || p.flags.overElevators) && <p className="small">Vous dépassez les plafonds de votre offre : rien n’est bloqué, mais le dépassement sera facturé. Contactez-nous pour adapter votre offre.</p>}
+        {(p.flags.overTechs || p.flags.overElevators) && <p className="small">Vous dépassez les plafonds de votre offre : rien n’est bloqué, mais le dépassement sera facturé. Passez à une offre supérieure pour l’éviter.</p>}
+        <p className="small muted">{p.offer.overageMode === 'block' ? 'Votre offre a des plafonds fermes : une fois atteints, il n’est plus possible d’ajouter de technicien ou d’appareil sans changer d’offre.' : 'Au-delà des plafonds, vous pouvez continuer à ajouter : le supplément est facturé.'}</p>
       </div>
     </section>
   )

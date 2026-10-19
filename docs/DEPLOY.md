@@ -99,3 +99,9 @@ cd server && TEST_DATABASE_URL=postgres://… npm test   # API contre un vrai Po
 ## 5. Rappels d'échéance et pages légales
 - **Rappels** : les administrateurs reçoivent un e-mail quand il reste 7 jours, puis 1 jour, avant la fin de l'essai ou de l'abonnement (une fois chacun), avec un bouton vers Réglages → Abonnement. La tâche tourne au démarrage puis toutes les heures.
 - **Pages légales** (`/#/legal/mentions`, `/confidentialite`, `/conditions`), liées depuis le pied de la page d'accueil et le formulaire de demande d'accès. Renseignez `LEGAL_NAME`, `LEGAL_EMAIL`, `LEGAL_PHONE`, `LEGAL_ADDRESS`, `LEGAL_REGISTRATION`, `LEGAL_HOST` : seuls les champs renseignés sont affichés. `LEGAL_EMAIL` figure aussi en pied des e-mails. Les textes sont un modèle de départ : à faire relire par un juriste avant publication.
+
+## 6. Plafonds des offres : facturés ou bloquants
+Chaque offre (console → Offres) a un mode de dépassement, copié sur l'entreprise à la création, à l'application de l'offre et au paiement, et modifiable par entreprise (Offre et plafonds) :
+- **Facturer le dépassement** : l'ajout reste possible, l'interface prévient du supplément (tarifs « technicien/appareil en plus »).
+- **Bloquer les ajouts** : une fois le plafond atteint, l'invitation d'un technicien et la création d'appareils (formulaire, import — partiel proposé — et synchronisation) sont refusées côté serveur, avec un message et un accès à Réglages → Abonnement. Modifier ou supprimer l'existant reste possible. L'essai gratuit est bloquant par défaut ; Essentiel et Pro facturent.
+Un plafond vide = illimité : jamais bloquant.

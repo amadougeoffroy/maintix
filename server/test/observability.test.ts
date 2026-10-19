@@ -1,3 +1,5 @@
+import { readdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { createApp } from '../src/app'
 import { loadConfig } from '../src/config'
@@ -48,7 +50,7 @@ describe('sondes de santé', () => {
     expect(await (await app.request('/api/health')).json()).toMatchObject({ ok: true, version: '1.2.3' })
     const ready = await app.request('/api/health/ready')
     expect(ready.status).toBe(200)
-    expect(await ready.json()).toMatchObject({ ok: true, db: 'up', migrations: 11 })
+    expect(await ready.json()).toMatchObject({ ok: true, db: 'up', migrations: readdirSync(fileURLToPath(new URL('../migrations', import.meta.url))).filter((f) => f.endsWith('.sql')).length })
   })
   it('signale la base indisponible par un 503', async () => {
     const env = await makeEnv()

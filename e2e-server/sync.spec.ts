@@ -307,8 +307,23 @@ test.describe.serial('mode serveur', () => {
     const card = page.locator('article', { hasText: 'Entreprise Cliente SA' })
     await card.getByRole('button', { name: 'Offre et plafonds' }).click()
     await card.getByLabel('Plafond techniciens').fill('2')
+    await card.getByLabel('En cas de dépassement').selectOption('block')
     await card.getByRole('button', { name: 'Enregistrer l’offre' }).click()
     await expect(page.locator('.toast-item', { hasText: 'Offre de « Entreprise Cliente SA » enregistrée' })).toBeVisible()
+
+    // plafond bloquant : 2 techniciens acceptés, le 3e est refusé avec un message clair
+    await dgPage.goto('/#/office/settings/equipe')
+    for (const [i, ok] of [[1, true], [2, true], [3, false]] as const) {
+      await dgPage.getByLabel('Nom complet').fill(`Tech Plafond ${i}`)
+      await dgPage.getByLabel('Adresse e-mail').fill(`plafond${i}@cliente.test`)
+      await dgPage.getByRole('button', { name: 'Envoyer l’invitation' }).click()
+      if (ok) await expect(dgPage.locator('.toast-item', { hasText: `plafond${i}@cliente.test` })).toBeVisible()
+      else {
+        await expect(dgPage.getByRole('dialog').getByRole('heading', { name: 'Limite de votre offre atteinte' })).toBeVisible()
+        await expect(dgPage.getByRole('dialog').getByRole('button', { name: 'Changer d’offre' })).toBeVisible()
+        await dgPage.getByRole('dialog').getByRole('button', { name: 'Fermer' }).click()
+      }
+    }
 
     // à 7 jours de l'échéance : bande rouge sur toutes les pages de l'entreprise, avec bouton vers l'abonnement
     const in3 = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10)

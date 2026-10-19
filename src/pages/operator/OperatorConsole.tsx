@@ -26,10 +26,10 @@ function OrgCard({ org, plans, onChange }: { org: OperatorOrg; plans: PlanPreset
   const [reasons, setReasons] = useState<SuspensionReason[]>([])
   const [sus, setSus] = useState({ code: 'unpaid', detail: '' })
   useEffect(() => { if (suspend && !reasons.length) api.opReasons().then((r) => setReasons(r.reasons)).catch(() => {}) }, [suspend, reasons.length])
-  const [f, setF] = useState({ plan: org.offer.plan, trialEndsOn: org.offer.trialEndsOn ?? '', subscriptionEndsOn: org.offer.subscriptionEndsOn ?? '', maxTechs: org.offer.maxTechs === null ? '' : String(org.offer.maxTechs), maxElevators: org.offer.maxElevators === null ? '' : String(org.offer.maxElevators), priceMonthly: String(org.offer.priceMonthly), extraTechPrice: String(org.offer.extraTechPrice), extraElevatorPrice: String(org.offer.extraElevatorPrice), notes: org.offer.notes })
+  const [f, setF] = useState({ plan: org.offer.plan, trialEndsOn: org.offer.trialEndsOn ?? '', subscriptionEndsOn: org.offer.subscriptionEndsOn ?? '', overageMode: org.offer.overageMode ?? 'bill', maxTechs: org.offer.maxTechs === null ? '' : String(org.offer.maxTechs), maxElevators: org.offer.maxElevators === null ? '' : String(org.offer.maxElevators), priceMonthly: String(org.offer.priceMonthly), extraTechPrice: String(org.offer.extraTechPrice), extraElevatorPrice: String(org.offer.extraElevatorPrice), notes: org.offer.notes })
   const preset = (code: string) => {
     const p = plans.find((x) => x.code === code)
-    if (p) setF({ ...f, plan: code, maxTechs: p.maxTechs === null ? '' : String(p.maxTechs), maxElevators: p.maxElevators === null ? '' : String(p.maxElevators), priceMonthly: String(p.priceMonthly), extraTechPrice: String(p.extraTechPrice), extraElevatorPrice: String(p.extraElevatorPrice) })
+    if (p) setF({ ...f, plan: code, maxTechs: p.maxTechs === null ? '' : String(p.maxTechs), maxElevators: p.maxElevators === null ? '' : String(p.maxElevators), priceMonthly: String(p.priceMonthly), extraTechPrice: String(p.extraTechPrice), extraElevatorPrice: String(p.extraElevatorPrice), overageMode: p.overageMode ?? 'bill' })
   }
   const num = (v: string) => (v.trim() === '' ? null : Math.max(0, Math.round(Number(v) || 0)))
   const suspended = org.status === 'suspended'
@@ -75,7 +75,7 @@ function OrgCard({ org, plans, onChange }: { org: OperatorOrg; plans: PlanPreset
         <form className="stack" onSubmit={async (e) => {
           e.preventDefault()
           try {
-            await api.opOffer(org.id, { plan: f.plan, trialEndsOn: f.trialEndsOn || null, subscriptionEndsOn: f.subscriptionEndsOn || null, maxTechs: num(f.maxTechs), maxElevators: num(f.maxElevators), priceMonthly: num(f.priceMonthly) ?? 0, extraTechPrice: num(f.extraTechPrice) ?? 0, extraElevatorPrice: num(f.extraElevatorPrice) ?? 0, notes: f.notes })
+            await api.opOffer(org.id, { overageMode: f.overageMode, plan: f.plan, trialEndsOn: f.trialEndsOn || null, subscriptionEndsOn: f.subscriptionEndsOn || null, maxTechs: num(f.maxTechs), maxElevators: num(f.maxElevators), priceMonthly: num(f.priceMonthly) ?? 0, extraTechPrice: num(f.extraTechPrice) ?? 0, extraElevatorPrice: num(f.extraElevatorPrice) ?? 0, notes: f.notes })
             feedback.toast(`Offre de « ${org.name} » enregistrée.`); setEdit(false); onChange()
           } catch { feedback.toast('Enregistrement impossible.', 'error') }
         }}>
@@ -90,6 +90,9 @@ function OrgCard({ org, plans, onChange }: { org: OperatorOrg; plans: PlanPreset
             <label className="field">Technicien en plus (FCFA/mois)<input inputMode="numeric" value={f.extraTechPrice} onChange={(e) => setF({ ...f, extraTechPrice: e.target.value })} /></label>
             <label className="field">Appareil en plus (FCFA/mois)<input inputMode="numeric" value={f.extraElevatorPrice} onChange={(e) => setF({ ...f, extraElevatorPrice: e.target.value })} /></label>
             <label className="field">Fin de l’essai<input type="date" value={f.trialEndsOn} onChange={(e) => setF({ ...f, trialEndsOn: e.target.value })} /></label>
+            <label className="field">En cas de dépassement
+              <select value={f.overageMode} onChange={(e) => setF({ ...f, overageMode: e.target.value as 'bill' | 'block' })}><option value="bill">Facturer le dépassement</option><option value="block">Bloquer les ajouts</option></select>
+            </label>
             <label className="field">Échéance de l’abonnement<input type="date" value={f.subscriptionEndsOn} onChange={(e) => setF({ ...f, subscriptionEndsOn: e.target.value })} /></label>
           </div>
           <label className="field">Note interne<textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></label>
@@ -208,10 +211,10 @@ function Billing() {
 }
 
 const numOrNull = (v: string) => (v.trim() === '' ? null : Math.max(0, Math.round(Number(v))))
-const blankPlan = { code: '', name: '', maxTechs: '', maxElevators: '', priceMonthly: '0', extraTechPrice: '0', extraElevatorPrice: '0', trialDays: '', archived: false }
+const blankPlan = { overageMode: 'bill' as 'bill' | 'block', code: '', name: '', maxTechs: '', maxElevators: '', priceMonthly: '0', extraTechPrice: '0', extraElevatorPrice: '0', trialDays: '', archived: false }
 type PlanForm = typeof blankPlan
-const formOf = (p: PlanPreset): PlanForm => ({ code: p.code, name: p.name, maxTechs: p.maxTechs === null ? '' : String(p.maxTechs), maxElevators: p.maxElevators === null ? '' : String(p.maxElevators), priceMonthly: String(p.priceMonthly), extraTechPrice: String(p.extraTechPrice), extraElevatorPrice: String(p.extraElevatorPrice), trialDays: p.trialDays ? String(p.trialDays) : '', archived: !!p.archived })
-const inputOf = (f: PlanForm): PlanInput => ({ name: f.name.trim(), maxTechs: numOrNull(f.maxTechs), maxElevators: numOrNull(f.maxElevators), priceMonthly: numOrNull(f.priceMonthly) ?? 0, extraTechPrice: numOrNull(f.extraTechPrice) ?? 0, extraElevatorPrice: numOrNull(f.extraElevatorPrice) ?? 0, trialDays: numOrNull(f.trialDays) || null, archived: f.archived })
+const formOf = (p: PlanPreset): PlanForm => ({ overageMode: p.overageMode ?? 'bill', code: p.code, name: p.name, maxTechs: p.maxTechs === null ? '' : String(p.maxTechs), maxElevators: p.maxElevators === null ? '' : String(p.maxElevators), priceMonthly: String(p.priceMonthly), extraTechPrice: String(p.extraTechPrice), extraElevatorPrice: String(p.extraElevatorPrice), trialDays: p.trialDays ? String(p.trialDays) : '', archived: !!p.archived })
+const inputOf = (f: PlanForm): PlanInput => ({ overageMode: f.overageMode, name: f.name.trim(), maxTechs: numOrNull(f.maxTechs), maxElevators: numOrNull(f.maxElevators), priceMonthly: numOrNull(f.priceMonthly) ?? 0, extraTechPrice: numOrNull(f.extraTechPrice) ?? 0, extraElevatorPrice: numOrNull(f.extraElevatorPrice) ?? 0, trialDays: numOrNull(f.trialDays) || null, archived: f.archived })
 
 function PlanFields({ f, setF, isNew }: { f: PlanForm; setF: (f: PlanForm) => void; isNew: boolean }) {
   const set = (k: keyof PlanForm) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value })
@@ -225,6 +228,9 @@ function PlanFields({ f, setF, isNew }: { f: PlanForm; setF: (f: PlanForm) => vo
       <label className="field">Technicien en plus (FCFA)<input type="number" min="0" value={f.extraTechPrice} onChange={set('extraTechPrice')} /></label>
       <label className="field">Appareil en plus (FCFA)<input type="number" min="0" value={f.extraElevatorPrice} onChange={set('extraElevatorPrice')} /></label>
       <label className="field">Essai (jours)<input type="number" min="1" placeholder="aucun" value={f.trialDays} onChange={set('trialDays')} /></label>
+      <label className="field">En cas de dépassement des plafonds
+        <select value={f.overageMode} onChange={(e) => setF({ ...f, overageMode: e.target.value as 'bill' | 'block' })}><option value="bill">Facturer le dépassement (ajout possible)</option><option value="block">Bloquer les ajouts</option></select>
+      </label>
     </div>
   )
 }
@@ -245,7 +251,7 @@ function PlanCardRow({ plan, onChange }: { plan: PlanPreset; onChange: (plans: P
     <article className="card stack">
       <div className="row between wrap">
         <div><h3>{plan.name} <span className="small muted">({plan.code})</span></h3>
-          <p className="small muted">{plan.priceMonthly > 0 ? `${fcfa(plan.priceMonthly)} / mois` : 'Gratuit ou sur devis'} · {plan.maxTechs === null ? 'techniciens illimités' : `${plan.maxTechs} techniciens`} · {plan.maxElevators === null ? 'appareils illimités' : `${plan.maxElevators} appareils`}{plan.trialDays ? ` · essai ${plan.trialDays} j` : ''}</p></div>
+          <p className="small muted">{plan.priceMonthly > 0 ? `${fcfa(plan.priceMonthly)} / mois` : 'Gratuit ou sur devis'} · {plan.maxTechs === null ? 'techniciens illimités' : `${plan.maxTechs} techniciens`} · {plan.maxElevators === null ? 'appareils illimités' : `${plan.maxElevators} appareils`}{plan.trialDays ? ` · essai ${plan.trialDays} j` : ''} · {plan.overageMode === 'block' ? 'plafonds bloquants' : 'dépassement facturé'}</p></div>
         {plan.archived && <Badge tone="warn">Archivée</Badge>}
       </div>
       <div className="row wrap">

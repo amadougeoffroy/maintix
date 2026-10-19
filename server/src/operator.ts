@@ -40,6 +40,7 @@ interface OrgRow {
   id: string; name: string; status: 'active' | 'suspended'; suspended_reason: string | null; created_at: string; plan: string; trial_ends_on: string | null
   max_techs: number | null; max_elevators: number | null; price_monthly: number; extra_tech_price: number; extra_elevator_price: number; notes: string
   subscription_ends_on: string | null; suspended_reason_code: string | null; suspended_reason_label: string | null; payable: boolean | null
+  overage_mode: 'bill' | 'block'
   members: number; techs: number; elevators: number; clients: number; jobs30: number; last_activity: string | null; last_login: string | null
 }
 
@@ -48,7 +49,7 @@ const ORG_SQL = `
          to_char(o.subscription_ends_on, 'YYYY-MM-DD') as subscription_ends_on, o.suspended_reason_code,
          (select r.label from suspension_reasons r where r.code = o.suspended_reason_code) as suspended_reason_label,
          (select r.lifted_by_payment from suspension_reasons r where r.code = o.suspended_reason_code) as payable,
-         o.max_techs, o.max_elevators, o.price_monthly, o.extra_tech_price, o.extra_elevator_price, o.notes,
+         o.overage_mode, o.max_techs, o.max_elevators, o.price_monthly, o.extra_tech_price, o.extra_elevator_price, o.notes,
          (select count(*)::int from members m where m.org_id = o.id) as members,
          (select count(*)::int from members m where m.org_id = o.id and m.role = 'tech') as techs,
          (select count(*)::int from docs d where d.org_id = o.id and d.collection = 'elevators' and not d.deleted) as elevators,
@@ -59,7 +60,7 @@ const ORG_SQL = `
     from organisations o`
 const ORG_FILTER = `o.kind = 'client'`
 
-const offerOf = (r: OrgRow): OrgOffer => ({ plan: r.plan, maxTechs: r.max_techs, maxElevators: r.max_elevators, priceMonthly: r.price_monthly, extraTechPrice: r.extra_tech_price, extraElevatorPrice: r.extra_elevator_price })
+const offerOf = (r: OrgRow): OrgOffer => ({ overageMode: r.overage_mode, plan: r.plan, maxTechs: r.max_techs, maxElevators: r.max_elevators, priceMonthly: r.price_monthly, extraTechPrice: r.extra_tech_price, extraElevatorPrice: r.extra_elevator_price })
 
 export function shapeOrg(r: OrgRow, now = today()) {
   const usage: Usage & { members: number } = { techs: r.techs, elevators: r.elevators, clients: r.clients, jobs30: r.jobs30, members: r.members }
@@ -87,8 +88,8 @@ export async function createOrganisationWithAdmin(db: Db, uid: (p: string) => st
   const trialEnds = preset.trialDays ? addDays(today(), preset.trialDays) : null
   return db.tx(async (t) => {
     await t.query(
-      `insert into organisations (id, name, plan, trial_ends_on, max_techs, max_elevators, price_monthly, extra_tech_price, extra_elevator_price) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [orgId, input.name, preset.code, trialEnds, preset.maxTechs, preset.maxElevators, preset.priceMonthly, preset.extraTechPrice, preset.extraElevatorPrice],
+      `insert into organisations (id, name, plan, trial_ends_on, max_techs, max_elevators, price_monthly, extra_tech_price, extra_elevator_price, overage_mode) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [orgId, input.name, preset.code, trialEnds, preset.maxTechs, preset.maxElevators, preset.priceMonthly, preset.extraTechPrice, preset.extraElevatorPrice, preset.overageMode ?? 'bill'],
     )
     const found = (await t.query<{ id: string }>('select id from users where email = $1', [input.adminEmail])).rows[0]
     const userId = found?.id ?? randomUUID()
@@ -145,13 +146,13 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     const int = z.number().int().min(0).max(1_000_000_000)
     const parsed = z.object({
       plan: z.string().max(30), trialEndsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(), subscriptionEndsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
-      maxTechs: int.nullable(), maxElevators: int.nullable(), priceMonthly: int, extraTechPrice: int, extraElevatorPrice: int, notes: z.string().max(2000).default(''),
+      maxTechs: int.nullable(), maxElevators: int.nullable(), priceMonthly: int, extraTechPrice: int, extraElevatorPrice: int, overageMode: z.enum(['bill', 'block']).default('bill'), notes: z.string().max(2000).default(''),
     }).safeParse(await c.req.json().catch(() => null))
     if (!parsed.success || !(await getPlan(db, parsed.data.plan))) return c.json({ error: 'invalid' }, 400)
     const o = parsed.data
     const r = await db.query(
-      `update organisations set plan=$2, trial_ends_on=$3, max_techs=$4, max_elevators=$5, price_monthly=$6, extra_tech_price=$7, extra_elevator_price=$8, notes=$9, subscription_ends_on=$10 where id=$1 and kind='client' returning id`,
-      [pid(c), o.plan, o.trialEndsOn ?? null, o.maxTechs, o.maxElevators, o.priceMonthly, o.extraTechPrice, o.extraElevatorPrice, o.notes, o.subscriptionEndsOn ?? null],
+      `update organisations set plan=$2, trial_ends_on=$3, max_techs=$4, max_elevators=$5, price_monthly=$6, extra_tech_price=$7, extra_elevator_price=$8, notes=$9, subscription_ends_on=$10, overage_mode=$11 where id=$1 and kind='client' returning id`,
+      [pid(c), o.plan, o.trialEndsOn ?? null, o.maxTechs, o.maxElevators, o.priceMonthly, o.extraTechPrice, o.extraElevatorPrice, o.notes, o.subscriptionEndsOn ?? null, o.overageMode],
     )
     if (!r.rows.length) return c.json({ error: 'not_found' }, 404)
     await audit(pid(c), who.userId, 'operator.org.offer', undefined, pid(c), { plan: o.plan, priceMonthly: o.priceMonthly })
@@ -185,7 +186,7 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
   const int = z.number().int().min(0).max(1_000_000_000)
   const planBody = z.object({
     name: z.string().trim().min(2).max(60), maxTechs: int.nullable(), maxElevators: int.nullable(), priceMonthly: int, extraTechPrice: int, extraElevatorPrice: int,
-    trialDays: z.number().int().min(1).max(365).nullable().default(null), archived: z.boolean().default(false),
+    trialDays: z.number().int().min(1).max(365).nullable().default(null), archived: z.boolean().default(false), overageMode: z.enum(['bill', 'block']).default('bill'),
   })
   app.get('/api/operator/plans', ...op, async (c) => c.json({ plans: await loadPlans(db) }))
   app.post('/api/operator/plans', ...op, async (c) => {
@@ -195,8 +196,8 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     const p = parsed.data
     if (await getPlan(db, p.code)) return c.json({ error: 'code_taken' }, 409)
     const sort = ((await db.query<{ m: number | null }>('select max(sort) as m from plans')).rows[0].m ?? 0) + 10
-    await db.query('insert into plans (code, name, max_techs, max_elevators, price_monthly, extra_tech_price, extra_elevator_price, trial_days, archived, sort) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-      [p.code, p.name, p.maxTechs, p.maxElevators, p.priceMonthly, p.extraTechPrice, p.extraElevatorPrice, p.trialDays, p.archived, sort])
+    await db.query('insert into plans (code, name, max_techs, max_elevators, price_monthly, extra_tech_price, extra_elevator_price, trial_days, archived, sort, overage_mode) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+      [p.code, p.name, p.maxTechs, p.maxElevators, p.priceMonthly, p.extraTechPrice, p.extraElevatorPrice, p.trialDays, p.archived, sort, p.overageMode])
     await audit(NIL, who.userId, 'operator.plan.create', undefined, p.code, { name: p.name, priceMonthly: p.priceMonthly })
     return c.json({ ok: true, plans: await loadPlans(db) }, 201)
   })
@@ -205,8 +206,8 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
     const parsed = planBody.safeParse(await c.req.json().catch(() => null))
     if (!parsed.success) return c.json({ error: 'invalid' }, 400)
     const p = parsed.data
-    const r = await db.query('update plans set name=$2, max_techs=$3, max_elevators=$4, price_monthly=$5, extra_tech_price=$6, extra_elevator_price=$7, trial_days=$8, archived=$9 where code=$1 returning code',
-      [c.req.param('code'), p.name, p.maxTechs, p.maxElevators, p.priceMonthly, p.extraTechPrice, p.extraElevatorPrice, p.trialDays, p.archived])
+    const r = await db.query('update plans set name=$2, max_techs=$3, max_elevators=$4, price_monthly=$5, extra_tech_price=$6, extra_elevator_price=$7, trial_days=$8, archived=$9, overage_mode=$10 where code=$1 returning code',
+      [c.req.param('code'), p.name, p.maxTechs, p.maxElevators, p.priceMonthly, p.extraTechPrice, p.extraElevatorPrice, p.trialDays, p.archived, p.overageMode])
     if (!r.rows.length) return c.json({ error: 'not_found' }, 404)
     await audit(NIL, who.userId, 'operator.plan.update', undefined, c.req.param('code'), { name: p.name, priceMonthly: p.priceMonthly, archived: p.archived })
     return c.json({ ok: true, plans: await loadPlans(db) })

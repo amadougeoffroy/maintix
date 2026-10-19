@@ -75,10 +75,11 @@ async function flush() {
       const sent = batch[i]
       // si l'utilisateur a modifié le document entre-temps, la nouvelle version reste en file
       if (outbox.get(keyOf(sent)) === sent) outbox.delete(keyOf(sent))
-      if (!r.ok && r.doc) rejected.push({ collection: r.collection, id: r.id, data: r.doc.data, deleted: r.doc.deleted, seq: r.doc.seq })
+      if (!r.ok && r.reason?.startsWith('plan_limit')) rejected.push({ collection: r.collection, id: r.id, data: null, deleted: true, seq: 0 }) // refusé : on retire l'ajout local
+      else if (!r.ok && r.doc) rejected.push({ collection: r.collection, id: r.id, data: r.doc.data, deleted: r.doc.deleted, seq: r.doc.seq })
       if (!r.ok) {
         setStatus({ lastError: `Modification refusée (${r.reason ?? 'inconnue'}) : ${r.collection}` })
-        feedback.toast('Une modification a été refusée par le serveur ; la version du serveur a été restaurée.', 'error')
+        feedback.toast(r.reason?.startsWith('plan_limit') ? 'Ajout refusé : la limite de votre offre est atteinte. Passez à une offre supérieure dans Réglages → Abonnement.' : 'Une modification a été refusée par le serveur ; la version du serveur a été restaurée.', 'error')
       }
     })
     if (rejected.length) applyRemoteDocs(rejected) // la version serveur fait foi

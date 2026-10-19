@@ -4,6 +4,7 @@ import { Bell, Building2, CreditCard, LifeBuoy, Users as UsersIcon } from 'lucid
 import { api, ApiError, type Member } from '../../api'
 import { actions, certStatus, runtime, useData } from '../../store'
 import type { OrgSettings } from '../../types'
+import { guardAdd, limitDialog } from '../../limits'
 import { PayPanel } from '../../components/PayPanel'
 import { PlanCard } from '../../components/PlanCard'
 import { feedback } from '../../feedback'
@@ -34,8 +35,9 @@ function Users() {
       {s.session.isAdmin && (
         <form className="card stack" onSubmit={async (e) => {
           e.preventDefault()
+          if (f.role === 'tech' && (await guardAdd('techs')) < 1) return
           try { await api.invite({ email: f.email, fullName: f.fullName, role: f.role, clientId: f.role === 'client' ? f.clientId : undefined }); feedback.toast(`Invitation envoyée à ${f.email}.`); setMsg(''); setF({ ...f, email: '', fullName: '' }); await reload() }
-          catch (x) { setMsg(x instanceof ApiError && x.code === 'already_member' ? 'Déjà membre.' : x instanceof ApiError && x.code === 'client_unknown' ? 'Choisissez un client existant.' : 'Invitation impossible.') }
+          catch (x) { if (x instanceof ApiError && x.code === 'plan_limit') { limitDialog('techs', null); return } setMsg(x instanceof ApiError && x.code === 'already_member' ? 'Déjà membre.' : x instanceof ApiError && x.code === 'client_unknown' ? 'Choisissez un client existant.' : 'Invitation impossible.') }
         }}>
           <h3>Inviter un utilisateur</h3>
           <input aria-label="Nom complet" required placeholder="Nom complet" value={f.fullName} onChange={(e) => setF({ ...f, fullName: e.target.value })} />

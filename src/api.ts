@@ -35,7 +35,7 @@ export interface SessionInfo {
   techId: string | null
   clientId: string | null
 }
-export interface Offer { plan: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialEndsOn: string | null; subscriptionEndsOn?: string | null; notes: string }
+export interface Offer { plan: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialEndsOn: string | null; subscriptionEndsOn?: string | null; overageMode: 'bill' | 'block'; notes: string }
 export interface OrgUsage { techs: number; elevators: number; clients: number; jobs30: number; members: number }
 export interface OperatorOrg {
   id: string; name: string; status: 'active' | 'suspended'; suspendedReason: string | null; createdAt: string
@@ -61,8 +61,8 @@ export interface BillingOverview {
   current: { plan: string; endsOn: string | null; trialEndsOn: string | null; status: string; suspension: { code: string | null; detail: string | null; payable: boolean } | null }
   plans: PlanPreset[]; months: number[]; methods: { code: string; label: string }[]; payments: PaymentRow[]
 }
-export interface PlanPreset { archived?: boolean; code: string; name: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialDays?: number }
-export interface PlanInput { name: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialDays: number | null; archived: boolean }
+export interface PlanPreset { overageMode?: 'bill' | 'block'; archived?: boolean; code: string; name: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialDays?: number }
+export interface PlanInput { name: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialDays: number | null; archived: boolean; overageMode: 'bill' | 'block' }
 export interface SignupRequest { id: string; company: string; contactName: string; email: string; phone: string | null; message: string | null; status: 'pending' | 'approved' | 'rejected'; createdAt: string; decidedAt: string | null; decisionReason: string | null; orgId: string | null }
 export interface BillingView {
   month: string; currency: 'FCFA'; totalEstimate: number

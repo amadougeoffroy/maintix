@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { parseParc, TEMPLATE_CSV } from '../../importer'
 import { actions } from '../../store'
 import { feedback } from '../../feedback'
+import { guardAdd } from '../../limits'
 import { xlsxToText } from '../../xlsx'
 import { Icon } from '../../components/Icon'
 
@@ -45,7 +46,7 @@ export default function Import() {
             </table></div>
           )}
           {res.rows.length > 20 && <p className="small muted">… et {res.rows.length - 20} autres lignes.</p>}
-          <button className="btn primary" disabled={res.rows.length === 0} onClick={() => { const r = actions.importParc(res.rows); setDone(r); setText(''); feedback.toast(`${r.elevators} appareil(s), ${r.sites} site(s) et ${r.clients} client(s) importés.`) }}>Importer {res.rows.length} appareil(s)</button>
+          <button className="btn primary" disabled={res.rows.length === 0} onClick={async () => { let rows = res.rows; const ok = await guardAdd('elevators', rows.length); if (ok < 1) return; if (ok < rows.length) { if (!(await feedback.confirm({ title: 'Limite de votre offre', body: `Votre offre ne permet d’ajouter que ${ok} appareil(s) sur les ${rows.length} du fichier. Importer les ${ok} premiers seulement ?`, confirmLabel: `Importer ${ok} appareil(s)`, cancelLabel: 'Annuler' }))) return; rows = rows.slice(0, ok) } const r = actions.importParc(rows); setDone(r); setText(''); feedback.toast(`${r.elevators} appareil(s), ${r.sites} site(s) et ${r.clients} client(s) importés.`) }}>Importer {res.rows.length} appareil(s)</button>
         </section>
       )}
       {done && <div className="card" style={{ borderColor: 'var(--ok)' }} role="status"><Icon n="done" /> {done.elevators} appareil(s), {done.sites} site(s) et {done.clients} client(s) créés. <Link to="/office/parc">Voir le parc</Link></div>}

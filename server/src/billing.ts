@@ -104,8 +104,8 @@ export async function applyPayment(db: Db, paymentId: string, today = todayStr()
     const plan = await getPlan(t, p.plan)
     await t.query(
       `update organisations set plan=$2, subscription_ends_on=$3, trial_ends_on=null,
-              max_techs=coalesce($4, max_techs), max_elevators=coalesce($5, max_elevators) where id=$1`,
-      [p.org_id, p.plan, end, plan?.maxTechs ?? null, plan?.maxElevators ?? null],
+              max_techs=coalesce($4, max_techs), max_elevators=coalesce($5, max_elevators), overage_mode=coalesce($6, overage_mode) where id=$1`,
+      [p.org_id, p.plan, end, plan?.maxTechs ?? null, plan?.maxElevators ?? null, plan?.overageMode ?? null],
     )
     if (plan) await t.query('update organisations set price_monthly=$2, extra_tech_price=$3, extra_elevator_price=$4 where id=$1', [p.org_id, plan.priceMonthly, plan.extraTechPrice, plan.extraElevatorPrice])
     const lifted = org.status === 'suspended' && org.payable === true

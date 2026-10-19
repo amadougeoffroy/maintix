@@ -129,3 +129,24 @@ describe('création d’une entreprise : e-mail de présentation', () => {
     expect(mails.at(-1)!.text).toContain('#/auth?token=')
   })
 })
+
+describe('console : connexions des entreprises', () => {
+  it('distingue les entreprises jamais connectées de celles dont un membre s’est connecté', async () => {
+    await createOrg(op, 'Jamais SA', 'dg@jamais.test', 'DG')
+    await createOrg(op, 'Connectée SA', 'dg@connectee.test', 'DG')
+    const overview = async () => (await (await op.get('/api/operator/overview')).json()).orgs as { name: string; everLoggedIn: boolean; lastLogin: string | null; usage: { members: number; loggedIn: number } }[]
+    let orgs = await overview()
+    expect(orgs.map((o) => [o.name, o.everLoggedIn, o.lastLogin, o.usage.loggedIn]).sort()).toEqual([['Connectée SA', false, null, 0], ['Jamais SA', false, null, 0]])
+    const dg = api(env, await login(env, 'dg@connectee.test'))
+    await dg.post('/api/members', { email: 't@connectee.test', fullName: 'Tech Un', role: 'tech' }) // invité, pas encore connecté
+    orgs = await overview()
+    const c = orgs.find((o) => o.name === 'Connectée SA')!
+    expect(c).toMatchObject({ everLoggedIn: true, usage: { members: 2, loggedIn: 1 } })
+    expect(c.lastLogin).not.toBeNull()
+    expect(orgs.find((o) => o.name === 'Jamais SA')).toMatchObject({ everLoggedIn: false, usage: { loggedIn: 0 } })
+    // l'ouverture d'une entreprise par un opérateur n'est pas une connexion de l'entreprise
+    const jamais = (await env.db.query<{ id: string }>(`select id from organisations where name = 'Jamais SA'`)).rows[0].id
+    await op.post(`/api/operator/orgs/${jamais}/enter`, {})
+    expect((await overview()).find((o) => o.name === 'Jamais SA')!.everLoggedIn).toBe(false)
+  })
+})

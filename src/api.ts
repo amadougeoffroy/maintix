@@ -36,10 +36,10 @@ export interface SessionInfo {
   clientId: string | null
 }
 export interface Offer { plan: string; maxTechs: number | null; maxElevators: number | null; priceMonthly: number; extraTechPrice: number; extraElevatorPrice: number; trialEndsOn: string | null; subscriptionEndsOn?: string | null; overageMode: 'bill' | 'block'; notes: string }
-export interface OrgUsage { techs: number; elevators: number; clients: number; jobs30: number; members: number }
+export interface OrgUsage { techs: number; elevators: number; clients: number; jobs30: number; members: number; loggedIn?: number }
 export interface OperatorOrg {
   id: string; name: string; status: 'active' | 'suspended'; suspendedReason: string | null; createdAt: string
-  offer: Offer; usage: OrgUsage; lastActivity: string | null; lastLogin: string | null
+  offer: Offer; usage: OrgUsage; lastActivity: string | null; lastLogin: string | null; everLoggedIn?: boolean
   estimate: { base: number; overTechs: number; overElevators: number; amount: number }
   flags: { overTechs: boolean; overElevators: boolean; trialExpired: boolean; subscriptionExpired?: boolean }
   suspension: { code: string | null; label: string | null; detail: string | null; payable: boolean } | null

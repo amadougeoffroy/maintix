@@ -252,6 +252,14 @@ test.describe.serial('mode serveur', () => {
     await expect(page.getByRole('heading', { name: 'Maintix', exact: true })).toHaveCount(0) // l'entreprise plateforme n'est pas listée
     await expect(page.getByText('Techniciens').first()).toBeVisible()
 
+    // l'entreprise de l'administrateur s'est déjà connectée ; filtre par connexion
+    await expect(page.locator('article', { hasText: 'Ascenseurs Dupont' }).getByText('Déjà connectée')).toBeVisible()
+    await page.getByRole('radio', { name: /Jamais connectées/ }).click()
+    await expect(page.locator('article', { hasText: 'Ascenseurs Dupont' })).toHaveCount(0)
+    await page.getByRole('radio', { name: /Déjà connectées/ }).click()
+    await expect(page.locator('article', { hasText: 'Ascenseurs Dupont' })).toBeVisible()
+    await page.getByRole('radio', { name: /Toutes/ }).click()
+
     // ouvrir une entreprise cliente, puis revenir à la console grâce au bandeau
     const dupont = page.locator('article', { hasText: 'Ascenseurs Dupont' })
     await dupont.getByRole('button', { name: 'Ouvrir l’entreprise' }).click()

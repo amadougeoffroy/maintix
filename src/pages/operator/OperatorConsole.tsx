@@ -39,8 +39,8 @@ function OrgCard({ org, plans, onChange }: { org: OperatorOrg; plans: PlanPreset
   return (
     <article className={`card stack ${suspended ? 'alert' : ''}`}>
       <div className="row between wrap">
-        <div><h3>{org.name}</h3><p className="small muted">Créée le {fmtDate(org.createdAt)} · {org.usage.members} membre(s) · dernière activité {when(org.lastActivity)}</p></div>
-        <div className="row wrap"><Badge tone={suspended ? 'bad' : 'ok'}>{suspended ? 'Suspendue' : 'Active'}</Badge><Badge tone="brand">{planName}</Badge>{org.flags.trialExpired && <Badge tone="bad">Essai expiré</Badge>}{org.flags.subscriptionExpired && <Badge tone="bad">Abonnement échu</Badge>}{(org.flags.overTechs || org.flags.overElevators) && <Badge tone="warn">Dépassement</Badge>}</div>
+        <div><h3>{org.name}</h3><p className="small muted">Créée le {fmtDate(org.createdAt)} · {org.usage.members} membre(s) · {org.everLoggedIn ? `${org.usage.loggedIn ?? 0}/${org.usage.members} connecté(s) · dernière connexion ${when(org.lastLogin)}` : 'aucune connexion pour le moment'}</p></div>
+        <div className="row wrap"><Badge tone={suspended ? 'bad' : 'ok'}>{suspended ? 'Suspendue' : 'Active'}</Badge><Badge tone={org.everLoggedIn ? 'ok' : 'warn'}>{org.everLoggedIn ? 'Déjà connectée' : 'Jamais connectée'}</Badge><Badge tone="brand">{planName}</Badge>{org.flags.trialExpired && <Badge tone="bad">Essai expiré</Badge>}{org.flags.subscriptionExpired && <Badge tone="bad">Abonnement échu</Badge>}{(org.flags.overTechs || org.flags.overElevators) && <Badge tone="warn">Dépassement</Badge>}</div>
       </div>
       {suspended && org.suspension && <p className="small"><strong>Motif :</strong> {org.suspension.label ?? org.suspendedReason}{org.suspension.detail ? ` — ${org.suspension.detail}` : ''} · <em>{org.suspension.payable ? 'levée possible par le paiement de l’entreprise ou par un opérateur' : 'seul un opérateur peut la lever'}</em></p>}
       <div className="grid2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
@@ -121,6 +121,9 @@ function OrgCard({ org, plans, onChange }: { org: OperatorOrg; plans: PlanPreset
 function Orgs({ plans, orgs, reload }: { plans: PlanPreset[]; orgs: OperatorOrg[]; reload: () => void }) {
   const [f, setF] = useState({ name: '', adminName: '', adminEmail: '', plan: 'essai' })
   const [busy, setBusy] = useState(false)
+  const [filter, setFilter] = useState<'all' | 'never' | 'ever'>('all')
+  const neverCount = orgs.filter((o) => !o.everLoggedIn).length
+  const shown = orgs.filter((o) => filter === 'all' || (filter === 'never') === !o.everLoggedIn)
   return (
     <div className="stack-lg">
       <form className="card stack" onSubmit={async (e) => {
@@ -144,8 +147,16 @@ function Orgs({ plans, orgs, reload }: { plans: PlanPreset[]; orgs: OperatorOrg[
         <div><button className="btn primary" disabled={busy}>Créer et envoyer l’invitation</button></div>
       </form>
       <section className="stack">
-        <h2>Entreprises ({orgs.length})</h2>
-        {orgs.map((o) => <OrgCard key={o.id} org={o} plans={plans} onChange={reload} />)}
+        <div className="row between wrap">
+          <h2>Entreprises ({shown.length}{shown.length !== orgs.length ? ` sur ${orgs.length}` : ''})</h2>
+          <div className="seg" role="radiogroup" aria-label="Filtrer par connexion">
+            {([['all', `Toutes (${orgs.length})`], ['never', `Jamais connectées (${neverCount})`], ['ever', `Déjà connectées (${orgs.length - neverCount})`]] as const).map(([k, label]) => (
+              <button key={k} type="button" role="radio" aria-checked={filter === k} className={filter === k ? 'ok on' : ''} onClick={() => setFilter(k)}>{label}</button>
+            ))}
+          </div>
+        </div>
+        {shown.length === 0 && <p className="muted">Aucune entreprise dans cette catégorie.</p>}
+        {shown.map((o) => <OrgCard key={o.id} org={o} plans={plans} onChange={reload} />)}
       </section>
     </div>
   )
@@ -538,7 +549,7 @@ export default function OperatorConsole() {
   const reload = useCallback(() => api.opOverview().then((d) => { setData(d); setError(false) }).catch(() => setError(true)), [])
   useEffect(() => { void reload() }, [reload])
   const TABS: [Tab, string][] = [['orgs', 'Entreprises'], ['signups', `Demandes${data?.pendingSignups ? ` (${data.pendingSignups})` : ''}`], ['plans', 'Offres'], ['finance', 'Finances'], ['payments', 'Paiements Jèko'], ['billing', 'Usage et facturation'], ['operators', 'Opérateurs']]
-  const totals = data ? { orgs: data.orgs.length, active: data.orgs.filter((o) => o.status === 'active').length, techs: data.orgs.reduce((t, o) => t + o.usage.techs, 0), elevators: data.orgs.reduce((t, o) => t + o.usage.elevators, 0) } : null
+  const totals = data ? { orgs: data.orgs.length, active: data.orgs.filter((o) => o.status === 'active').length, connected: data.orgs.filter((o) => o.everLoggedIn).length, techs: data.orgs.reduce((t, o) => t + o.usage.techs, 0), elevators: data.orgs.reduce((t, o) => t + o.usage.elevators, 0) } : null
   return (
     <div className="stack-lg">
       <div><h1>Console opérateur</h1><p className="muted">Gérez les entreprises clientes de la plateforme.</p></div>
@@ -546,6 +557,7 @@ export default function OperatorConsole() {
       {totals && (
         <div className="grid2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
           <div className="card kpi"><span className="muted small">Entreprises actives</span><b>{totals.active}/{totals.orgs}</b></div>
+          <div className="card kpi"><span className="muted small">Déjà connectées</span><b>{totals.connected}/{totals.orgs}</b></div>
           <div className="card kpi"><span className="muted small">Techniciens</span><b>{totals.techs}</b></div>
           <div className="card kpi"><span className="muted small">Appareils</span><b>{totals.elevators}</b></div>
           <div className="card kpi"><span className="muted small">Demandes en attente</span><b style={data!.pendingSignups ? { color: 'var(--warn)' } : undefined}>{data!.pendingSignups}</b></div>

@@ -43,7 +43,7 @@ interface OrgRow {
   max_techs: number | null; max_elevators: number | null; price_monthly: number; extra_tech_price: number; extra_elevator_price: number; notes: string
   subscription_ends_on: string | null; suspended_reason_code: string | null; suspended_reason_label: string | null; payable: boolean | null
   overage_mode: 'bill' | 'block'
-  members: number; techs: number; elevators: number; clients: number; jobs30: number; last_activity: string | null; last_login: string | null
+  members: number; members_logged_in: number; techs: number; elevators: number; clients: number; jobs30: number; last_activity: string | null; last_login: string | null
 }
 
 const ORG_SQL = `
@@ -58,20 +58,21 @@ const ORG_SQL = `
          (select count(*)::int from docs d where d.org_id = o.id and d.collection = 'clients' and not d.deleted) as clients,
          (select count(*)::int from docs d where d.org_id = o.id and d.collection = 'jobs' and not d.deleted and d.data->>'createdAt' >= $1) as jobs30,
          (select max(d.updated_at) from docs d where d.org_id = o.id) as last_activity,
-         (select max(a.at) from audit_log a where a.org_id = o.id and a.action = 'login') as last_login
+         (select max(a.at) from audit_log a where a.org_id = o.id and a.action = 'login') as last_login,
+         (select count(distinct a.user_id)::int from audit_log a where a.org_id = o.id and a.action = 'login') as members_logged_in
     from organisations o`
 const ORG_FILTER = `o.kind = 'client'`
 
 const offerOf = (r: OrgRow): OrgOffer => ({ overageMode: r.overage_mode, plan: r.plan, maxTechs: r.max_techs, maxElevators: r.max_elevators, priceMonthly: r.price_monthly, extraTechPrice: r.extra_tech_price, extraElevatorPrice: r.extra_elevator_price })
 
 export function shapeOrg(r: OrgRow, now = today()) {
-  const usage: Usage & { members: number } = { techs: r.techs, elevators: r.elevators, clients: r.clients, jobs30: r.jobs30, members: r.members }
+  const usage: Usage & { members: number; loggedIn: number } = { techs: r.techs, elevators: r.elevators, clients: r.clients, jobs30: r.jobs30, members: r.members, loggedIn: r.members_logged_in }
   const est = estimateAmount(offerOf(r), usage)
   return {
     id: r.id, name: r.name, status: r.status, suspendedReason: r.suspended_reason, createdAt: r.created_at,
     suspension: r.status === 'suspended' ? { code: r.suspended_reason_code, label: r.suspended_reason_label, detail: r.suspended_reason, payable: !!r.payable } : null,
     offer: { ...offerOf(r), trialEndsOn: r.trial_ends_on, subscriptionEndsOn: r.subscription_ends_on, notes: r.notes },
-    usage, lastActivity: r.last_activity, lastLogin: r.last_login, estimate: est,
+    usage, lastActivity: r.last_activity, lastLogin: r.last_login, everLoggedIn: r.members_logged_in > 0, estimate: est,
     flags: { overTechs: est.overTechs > 0, overElevators: est.overElevators > 0, trialExpired: r.plan === 'essai' && !!r.trial_ends_on && r.trial_ends_on < now, subscriptionExpired: !!r.subscription_ends_on && r.subscription_ends_on < now },
   }
 }

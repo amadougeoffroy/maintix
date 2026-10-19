@@ -15,7 +15,7 @@ import type { Mailer } from './mailer'
 import { checkWrite, COLLECTIONS, docKey, type Collection, type Doc } from './rules'
 import { buildInvoicePdf, buildReportPdf } from './pdf'
 import { registerOperatorRoutes, loadOrgs } from './operator'
-import { applyPayment, getVat, jekoGateway, loadReceipt, MONTHS_CHOICES, PAY_METHODS, sendReceipt, verifyJekoSignature, type Gateway, type JekoCreds } from './billing'
+import { applyPayment, getPaymentSwitch, getVat, jekoGateway, loadReceipt, MONTHS_CHOICES, PAY_METHODS, sendReceipt, verifyJekoSignature, type Gateway, type JekoCreds } from './billing'
 import { buildReceiptPdf } from './pdf'
 import { DISCOUNT_PCT, priceFor } from '../../shared/pricing'
 import { getSettings } from './secrets'
@@ -751,6 +751,7 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     const plans = (await loadPlans(db)).filter((p) => !p.archived && p.priceMonthly > 0)
     const payments = (await db.query(`select id, plan, months, amount, list_amount as "listAmount", discount_pct as "discountPct", vat_amount as "vatAmount", receipt_number as "receiptNumber", status, source, method, reference, created_at as "createdAt", paid_at as "paidAt", period_end as "periodEnd" from payments where org_id = $1 order by created_at desc limit 30`, [who.orgId])).rows
     return c.json({
+      paymentsEnabled: (await getPaymentSwitch(db)).enabled, support: (({ supportPhone, supportEmail }) => ({ phone: supportPhone, email: supportEmail }))(await getPaymentSwitch(db)),
       online: !!(await jekoCreds()), canPay: who.role === 'admin' && (who.orgStatus === 'active' || who.payable),
       current: { plan: org.plan, endsOn: org.ends, trialEndsOn: org.trial, status: org.status, suspension: org.status === 'suspended' ? { code: org.code, detail: org.reason, payable: who.payable } : null },
       plans, months: MONTHS_CHOICES, discounts: DISCOUNT_PCT, vat: await getVat(db), methods: PAY_METHODS.map(([code, label]) => ({ code, label })), payments,
@@ -761,6 +762,8 @@ export function createApp({ db, config, mailer, notifier, logger = silentLogger,
     const parsed = z.object({ plan: z.string().max(30), months: z.union([z.literal(1), z.literal(3), z.literal(6), z.literal(12)]), method: z.enum(PAY_METHODS.map((m) => m[0]) as [string, ...string[]]) }).safeParse(await c.req.json().catch(() => null))
     if (!parsed.success) return c.json({ error: 'invalid' }, 400)
     if (who.orgStatus === 'suspended' && !who.payable) return c.json({ error: 'not_payable' }, 403) // suspension que seul un opérateur peut lever
+    const sw = await getPaymentSwitch(db)
+    if (!sw.enabled) return c.json({ error: 'payments_disabled', support: { phone: sw.supportPhone, email: sw.supportEmail } }, 503) // paiements désactivés par un opérateur
     if (!(await limit(`checkout:${who.userId}`, 15, HOUR))) return c.json({ error: 'rate_limited' }, 429)
     const plan = await getPlan(db, parsed.data.plan)
     if (!plan || plan.archived || plan.priceMonthly <= 0) return c.json({ error: 'unknown_plan' }, 400)

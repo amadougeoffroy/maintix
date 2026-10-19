@@ -413,6 +413,29 @@ function Finance({ plans }: { plans: PlanPreset[] }) {
   )
 }
 
+/** Interrupteur général des paiements en ligne + contact du support affiché aux entreprises quand ils sont désactivés. */
+function PaymentSwitchPanel() {
+  const [v, setV] = useState<{ enabled: boolean; supportPhone: string; supportEmail: string } | null>(null)
+  useEffect(() => { api.opPaymentSwitch().then(setV).catch(() => {}) }, [])
+  if (!v) return null
+  return (
+    <form className="card stack" onSubmit={async (e) => {
+      e.preventDefault()
+      try { const r = await api.opSavePaymentSwitch(v); setV(r); feedback.toast(r.enabled ? 'Paiements en ligne activés : les entreprises peuvent payer leur offre.' : 'Paiements en ligne désactivés : les entreprises sont invitées à contacter le support.', r.enabled ? 'ok' : 'info') }
+      catch { feedback.toast('Enregistrement impossible : vérifiez le téléphone et l’e-mail du support.', 'error') }
+    }}>
+      <div className="row between wrap"><h3>Paiements sur la plateforme</h3><Badge tone={v.enabled ? 'ok' : 'warn'}>{v.enabled ? 'Activés' : 'Désactivés'}</Badge></div>
+      <label className="row"><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={v.enabled} onChange={(e) => setV({ ...v, enabled: e.target.checked })} /> Autoriser les entreprises à payer leur offre en ligne</label>
+      <p className="small muted">Activés : chaque entreprise choisit son offre et paie par Jèko. Désactivés : un message lui indique que les paiements en ligne sont désactivés temporairement et de contacter le support. Les paiements enregistrés par un opérateur restent possibles, et un paiement déjà en cours est toujours pris en compte.</p>
+      <div className="grid2">
+        <label className="field">Téléphone du support<input inputMode="tel" required value={v.supportPhone} onChange={(e) => setV({ ...v, supportPhone: e.target.value })} /></label>
+        <label className="field">E-mail du support<input type="email" required value={v.supportEmail} onChange={(e) => setV({ ...v, supportEmail: e.target.value })} /></label>
+      </div>
+      <div><button className="btn primary">Enregistrer l’interrupteur</button></div>
+    </form>
+  )
+}
+
 function VatPanel() {
   const [v, setV] = useState<{ enabled: boolean; rate: string } | null>(null)
   useEffect(() => { api.opVat().then((x) => setV({ enabled: x.enabled, rate: String(x.rate) })).catch(() => {}) }, [])
@@ -443,6 +466,7 @@ function PaymentSettingsPanel() {
   if (!v) return <p className="muted">Chargement…</p>
   return (
     <div className="stack-lg">
+      <PaymentSwitchPanel />
       <section className="stack">
         <h2>Paiements en ligne : Jèko</h2>
         <p className="muted small">Les clés se génèrent dans le tableau de bord Jèko (Paramètres → API & Webhooks). Elles sont enregistrées chiffrées et ne sont plus jamais affichées : laisser un champ vide conserve la valeur actuelle.</p>

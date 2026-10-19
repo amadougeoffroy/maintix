@@ -37,6 +37,24 @@ export async function setVat(db: Pick<Db, 'query'>, v: VatSettings) {
 /** Taux de TVA à appliquer à un nouvel abonnement (0 si la TVA est désactivée). */
 export const vatRateFor = async (db: Pick<Db, 'query'>) => { const v = await getVat(db); return v.enabled ? v.rate : 0 }
 
+/* ---------- interrupteur des paiements en ligne et contact du support ---------- */
+export interface PaymentSwitch { enabled: boolean; supportPhone: string; supportEmail: string }
+export const DEFAULT_SUPPORT = { supportPhone: '0757820485', supportEmail: 'contact@windsit-digital.com' }
+export async function getPaymentSwitch(db: Pick<Db, 'query'>): Promise<PaymentSwitch> {
+  const rows = (await db.query<{ key: string; value: string }>(`select key, value from platform_settings where key in ('payments.enabled', 'support.phone', 'support.email')`)).rows
+  const m = new Map(rows.map((r) => [r.key, r.value]))
+  return { enabled: (m.get('payments.enabled') ?? '1') === '1', supportPhone: m.get('support.phone') ?? DEFAULT_SUPPORT.supportPhone, supportEmail: m.get('support.email') ?? DEFAULT_SUPPORT.supportEmail }
+}
+export async function setPaymentSwitch(db: Pick<Db, 'query'>, v: PaymentSwitch) {
+  for (const [k, val] of [['payments.enabled', v.enabled ? '1' : '0'], ['support.phone', v.supportPhone], ['support.email', v.supportEmail]]) {
+    await db.query(`insert into platform_settings (key, value) values ($1,$2) on conflict (key) do update set value = excluded.value, updated_at = now()`, [k, val])
+  }
+}
+
+/** Phrase d'orientation vers le support quand les paiements en ligne sont désactivés. */
+export const supportSentence = (sw: PaymentSwitch, prefix = '') =>
+  `${prefix ? `${prefix} ` : ''}Les paiements sur la plateforme sont désactivés temporairement : pour tout paiement, contactez le support au ${sw.supportPhone} ou par e-mail à ${sw.supportEmail}.`
+
 /* ---------- passerelle de paiement ---------- */
 export interface JekoCreds { apiKey: string; apiKeyId: string; storeId: string }
 export interface Gateway {
@@ -139,6 +157,7 @@ export async function applyPayment(db: Db, paymentId: string, today = todayStr()
 export async function sweepSubscriptions(db: Db, mailer: Mailer, config: Config, today = todayStr()) {
   const suspended = await runAutoSuspension(db, today)
   await sendRenewalReminders(db, mailer, config, today)
+  const sw = await getPaymentSwitch(db)
   for (const o of suspended) {
     const admins = (await db.query<{ email: string; full_name: string }>(`select u.email, m.full_name from members m join users u on u.id = m.user_id where m.org_id = $1 and m.role = 'admin'`, [o.id])).rows
     const trial = o.code === 'trial_expired'
@@ -148,9 +167,9 @@ export async function sweepSubscriptions(db: Db, mailer: Mailer, config: Config,
         subject: `Accès suspendu : ${trial ? 'fin de la période d’essai' : 'échéance de votre offre'}`,
         ...emailParts({
           title: `Bonjour ${a.full_name},`,
-          paragraphs: [trial ? `La période d’essai de « ${o.name} » est terminée et l’accès à Maintix est suspendu.` : `L’échéance de l’offre souscrite par « ${o.name} » est atteinte et l’accès à Maintix est suspendu.`, 'Vos données sont conservées. Choisissez votre offre et réglez en ligne (1, 3, 6 ou 12 mois) : l’accès est rétabli dès la confirmation du paiement.'],
+          paragraphs: [trial ? `La période d’essai de « ${o.name} » est terminée et l’accès à Maintix est suspendu.` : `L’échéance de l’offre souscrite par « ${o.name} » est atteinte et l’accès à Maintix est suspendu.`, sw.enabled ? 'Vos données sont conservées. Choisissez votre offre et réglez en ligne (1, 3, 6 ou 12 mois) : l’accès est rétabli dès la confirmation du paiement.' : supportSentence(sw, 'Vos données sont conservées.')],
           facts: [['Entreprise', o.name]],
-          button: { label: 'Payer et rétablir l’accès', url: `${config.appUrl}/#/` },
+          button: { label: sw.enabled ? 'Payer et rétablir l’accès' : 'Ouvrir Maintix', url: `${config.appUrl}/#/` },
         }),
       }).catch(() => {})
     }
@@ -167,6 +186,7 @@ export async function sendRenewalReminders(db: Db, mailer: Mailer, config: Confi
       where ends_on is not null and ends_on::date >= $1::date and (ends_on::date - $1::date) <= 7`, [today],
   )).rows
   const sent: { org: string; kind: string }[] = []
+  const sw = await getPaymentSwitch(db)
   for (const o of orgs) {
     const kind = o.days <= 1 ? 'd1' : 'd7'
     const fresh = (await db.query(`insert into renewal_reminders (org_id, ends_on, kind) values ($1,$2,$3) on conflict do nothing returning org_id`, [o.id, o.ends_on, kind])).rows.length
@@ -181,7 +201,7 @@ export async function sendRenewalReminders(db: Db, mailer: Mailer, config: Confi
         ...emailParts({
           preheader: `Renouvelez avant le ${o.ends_on.split('-').reverse().join('/')} pour ne pas perdre l’accès.`,
           title: `Bonjour ${a.full_name},`,
-          paragraphs: [`${what.charAt(0).toUpperCase() + what.slice(1)} de « ${o.name} » ${when}.`, 'Renouvelez-le avant cette date : passé ce délai, l’accès est suspendu automatiquement (vos données restent conservées). Le paiement en ligne (1, 3, 6 ou 12 mois) rétablit ou prolonge l’accès immédiatement.'],
+          paragraphs: [`${what.charAt(0).toUpperCase() + what.slice(1)} de « ${o.name} » ${when}.`, 'Renouvelez-le avant cette date : passé ce délai, l’accès est suspendu automatiquement (vos données restent conservées).', sw.enabled ? 'Le paiement en ligne (1, 3, 6 ou 12 mois) prolonge l’accès immédiatement.' : supportSentence(sw, '')],
           facts: [['Entreprise', o.name], ['Échéance', o.ends_on.split('-').reverse().join('/')]],
           button: { label: 'Renouveler maintenant', url: `${config.appUrl}/#/office/settings/abonnement` },
         }),

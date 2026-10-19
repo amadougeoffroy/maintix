@@ -58,6 +58,7 @@ export interface FinanceView {
 }
 export interface PaymentSettings { provider: 'jeko'; webhookUrl: string; apiKeyId: string; storeId: string; apiKeyMasked: string | null; webhookSecretMasked: string | null; configured: boolean; webhookConfigured: boolean; encryptedWith: string }
 export interface BillingOverview {
+  paymentsEnabled: boolean; support: { phone: string; email: string }
   online: boolean; canPay: boolean; discounts: Record<number, number>; vat: { enabled: boolean; rate: number }
   current: { plan: string; endsOn: string | null; trialEndsOn: string | null; status: string; suspension: { code: string | null; detail: string | null; payable: boolean } | null }
   plans: PlanPreset[]; months: number[]; methods: { code: string; label: string }[]; payments: PaymentRow[]
@@ -155,6 +156,8 @@ export const api = {
   opManualPayment: (orgId: string, b: { plan: string; months: number; amount?: number; note: string }) => call<{ ok: true; lifted: boolean }>('POST', `/operator/orgs/${orgId}/payments`, b),
   opDeleteOrg: (id: string, confirmName: string) => call<{ ok: true; members: number; users: number; docs: number; files: number }>('DELETE', `/operator/orgs/${id}`, { confirmName }),
   clearData: () => call<{ ok: true; documents: number }>('POST', '/org/clear-data', { confirm: 'SUPPRIMER' }),
+  opPaymentSwitch: () => call<{ enabled: boolean; supportPhone: string; supportEmail: string }>('GET', '/operator/payment-switch'),
+  opSavePaymentSwitch: (b: { enabled: boolean; supportPhone: string; supportEmail: string }) => call<{ ok: true; enabled: boolean; supportPhone: string; supportEmail: string }>('PUT', '/operator/payment-switch', b),
   opVat: () => call<{ enabled: boolean; rate: number }>('GET', '/operator/vat-settings'),
   opSaveVat: (b: { enabled: boolean; rate: number }) => call<{ ok: true; enabled: boolean; rate: number }>('PUT', '/operator/vat-settings', b),
   opConfirmPayment: (id: string) => call<{ ok: true }>('POST', `/operator/payments/${id}/confirm`, {}),

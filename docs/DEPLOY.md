@@ -120,3 +120,8 @@ Identifiants d'entreprise : **RCCM**, **n° de compte contribuable (CC)**, **ré
 
 ## 10. TVA sur les abonnements (optionnelle)
 Console → **Paiements Jèko** → *TVA sur les abonnements* : case « Appliquer la TVA » et taux (18 % par défaut). Désactivée (réglage initial) : le prix de l'offre est le montant payé. Activée : les prix des offres sont hors taxes ; la TVA s'ajoute au total après remise de durée, Jèko encaisse le TTC, et le reçu PDF et l'e-mail détaillent HT, TVA et TTC. Le taux est figé sur chaque paiement : modifier ou désactiver la TVA ne touche que les nouveaux paiements. Un paiement hors ligne dont le montant est saisi à la main n'ajoute ni remise ni TVA.
+
+## 11. Activer ou désactiver les paiements en ligne
+Console → **Paiements Jèko** → *Paiements sur la plateforme* : case « Autoriser les entreprises à payer leur offre en ligne », et contact du support (téléphone et e-mail, modifiables ; par défaut 0757820485 et contact@windsit-digital.com).
+- **Activés** (réglage initial) : les entreprises choisissent leur offre et paient par Jèko.
+- **Désactivés** : à la place du formulaire (Réglages → Abonnement et écran de suspension), un message indique que les paiements sur la plateforme sont désactivés temporairement et de contacter le support (liens d'appel et e-mail). Le paiement est aussi refusé côté serveur. Les e-mails de rappel et de suspension orientent vers le support. Les paiements enregistrés par un opérateur restent possibles, et un paiement déjà initié est quand même pris en compte à sa confirmation.

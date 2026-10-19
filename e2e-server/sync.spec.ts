@@ -444,6 +444,25 @@ test.describe.serial('mode serveur', () => {
     await page.getByRole('button', { name: 'Enregistrer la TVA' }).click()
     await expect(page.locator('.toast-item', { hasText: 'TVA désactivée' })).toBeVisible()
 
+    // interrupteur des paiements : désactivés, l'entreprise voit le message et le contact du support
+    await page.getByLabel('Autoriser les entreprises à payer leur offre en ligne').uncheck()
+    await page.getByRole('button', { name: 'Enregistrer l’interrupteur' }).click()
+    await expect(page.locator('.toast-item', { hasText: 'Paiements en ligne désactivés' })).toBeVisible()
+    const noPay = await freshLogin(browser, 'dg@cliente.test')
+    await noPay.page.goto('/#/office/settings/abonnement')
+    await expect(noPay.page.getByText('Paiements sur la plateforme désactivés temporairement')).toBeVisible()
+    await expect(noPay.page.getByRole('link', { name: /Appeler le 0757820485/ })).toHaveAttribute('href', 'tel:0757820485')
+    await expect(noPay.page.getByRole('link', { name: 'contact@windsit-digital.com' })).toHaveAttribute('href', 'mailto:contact@windsit-digital.com')
+    await expect(noPay.page.getByRole('button', { name: /Payer .* avec Jèko/ })).toHaveCount(0)
+    await noPay.page.waitForTimeout(400)
+    const axe5 = await new AxeBuilder({ page: noPay.page }).withTags(['wcag2a', 'wcag2aa']).analyze()
+    expect(axe5.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`)).toEqual([])
+    if (process.env.SHOTS) await noPay.page.screenshot({ path: 'docs/screenshots/52-paiements-desactives.png', fullPage: true })
+    await noPay.ctx.close()
+    await page.getByLabel('Autoriser les entreprises à payer leur offre en ligne').check()
+    await page.getByRole('button', { name: 'Enregistrer l’interrupteur' }).click()
+    await expect(page.locator('.toast-item', { hasText: 'Paiements en ligne activés' })).toBeVisible()
+
     // facturation de la plateforme : montants en FCFA
     await page.getByRole('tab', { name: 'Usage et facturation' }).click()
     await expect(page.getByText('35 000 FCFA').first()).toBeVisible()

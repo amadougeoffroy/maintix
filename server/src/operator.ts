@@ -7,7 +7,7 @@ import type { Config } from './config'
 import type { Db } from './db'
 import type { Mailer } from './mailer'
 import { estimateAmount, getPlan, loadPlans, type OrgOffer, type Usage } from './plans'
-import { applyPayment, getVat, loadReceipt, setVat, reactivateOrg, sendReceipt, suspendOrg, todayStr, type Gateway, type JekoCreds } from './billing'
+import { applyPayment, getPaymentSwitch, setPaymentSwitch, getVat, loadReceipt, setVat, reactivateOrg, sendReceipt, suspendOrg, todayStr, type Gateway, type JekoCreds } from './billing'
 import { buildReceiptPdf } from './pdf'
 import { priceFor } from '../../shared/pricing'
 import { clearSetting, getSettings, setSetting, SETTING_KEYS, type SettingKey } from './secrets'
@@ -398,6 +398,17 @@ export function registerOperatorRoutes(app: Hono<Env>, d: OperatorDeps) {
       const stores = await d.makeGateway({ apiKey: st['jeko.apiKey'], apiKeyId: st['jeko.apiKeyId'], storeId: st['jeko.storeId'] ?? '' }).listStores()
       return c.json({ ok: true, stores, storeFound: !!st['jeko.storeId'] && stores.some((x) => x.id === st['jeko.storeId']) })
     } catch { return c.json({ error: 'jeko_unreachable_or_refused' }, 502) }
+  })
+
+  /* ---------- interrupteur des paiements en ligne + contact du support ---------- */
+  app.get('/api/operator/payment-switch', ...op, async (c) => c.json(await getPaymentSwitch(db)))
+  app.put('/api/operator/payment-switch', ...op, async (c) => {
+    const who = c.get('who')
+    const parsed = z.object({ enabled: z.boolean(), supportPhone: z.string().trim().min(3).max(40), supportEmail: emailSchema }).safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) return c.json({ error: 'invalid' }, 400)
+    await setPaymentSwitch(db, parsed.data)
+    await audit(NIL, who.userId, 'operator.payment_switch.update', undefined, 'payments', { enabled: parsed.data.enabled })
+    return c.json({ ok: true, ...(await getPaymentSwitch(db)) })
   })
 
   /* ---------- TVA sur les abonnements (activable) ---------- */

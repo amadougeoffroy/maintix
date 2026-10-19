@@ -26,7 +26,14 @@ export function PayPanel({ compact = false }: { compact?: boolean }) {
   return (
     <section className="stack">
       {!compact && <h2>Abonnement et paiement</h2>}
-      {blocked ? (
+      {!o.paymentsEnabled && !blocked ? (
+        <div className="card stack" role="status" style={{ borderColor: 'var(--warn)' }}>
+          <strong>Paiements sur la plateforme désactivés temporairement</strong>
+          <p>Pour tout paiement, veuillez contacter le support :</p>
+          <p><a className="btn" href={`tel:${o.support.phone.replace(/\s/g, '')}`}>Appeler le {o.support.phone}</a> <a className="btn" href={`mailto:${o.support.email}`}>{o.support.email}</a></p>
+          <p className="small muted">Votre accès est rétabli ou prolongé dès que le support a enregistré votre paiement.</p>
+        </div>
+      ) : blocked ? (
         <div className="card alert" role="alert"><strong>Le paiement ne peut pas lever cette suspension.</strong><p className="small">Contactez votre interlocuteur Maintix : seule l’équipe Maintix peut rétablir l’accès.</p></div>
       ) : !o.canPay ? (
         <p className="muted small">Seul l’administrateur de l’entreprise peut payer l’abonnement.</p>
@@ -37,7 +44,7 @@ export function PayPanel({ compact = false }: { compact?: boolean }) {
           e.preventDefault()
           setBusy(true)
           try { const r = await api.checkout({ plan, months, method }); window.location.href = r.redirectUrl }
-          catch (x) { setBusy(false); feedback.toast(x instanceof ApiError && x.code === 'not_payable' ? 'Ce paiement ne peut pas lever la suspension : contactez Maintix.' : 'Le paiement n’a pas pu démarrer. Réessayez dans un instant.', 'error') }
+          catch (x) { setBusy(false); feedback.toast(x instanceof ApiError && x.code === 'payments_disabled' ? 'Les paiements sont désactivés temporairement : contactez le support.' : x instanceof ApiError && x.code === 'not_payable' ? 'Ce paiement ne peut pas lever la suspension : contactez Maintix.' : 'Le paiement n’a pas pu démarrer. Réessayez dans un instant.', 'error') }
         }}>
           <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
             <legend className="small muted">Offre</legend>

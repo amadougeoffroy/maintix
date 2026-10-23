@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { canonicalJson, sealPayload } from '../../shared/canonical'
 import type { Principal } from './auth'
 
-export const COLLECTIONS = ['clients', 'sites', 'elevators', 'techs', 'contracts', 'onCall', 'jobs', 'defects', 'quotes', 'invoices', 'settings'] as const
+export const COLLECTIONS = ['clients', 'sites', 'elevators', 'techs', 'contracts', 'onCall', 'jobs', 'defects', 'quotes', 'invoices', 'settings', 'stock', 'stockMoves'] as const
 export type Collection = (typeof COLLECTIONS)[number]
 export type Doc = Record<string, unknown>
 export type Verdict = { ok: true } | { ok: false; reason: string }
@@ -45,6 +45,12 @@ export function checkInvoiceIntegrity(existing: Doc | null, incoming: Doc): Verd
 
 /** Droits d'écriture par rôle. `incoming === null` signifie suppression. */
 export function checkWrite(who: Principal, collection: Collection, existing: Doc | null, incoming: Doc | null): Verdict {
+  // mouvements de stock : écrits une fois, jamais modifiés ni supprimés (l'historique fait foi) ; un technicien ne crée que des sorties de visite
+  if (collection === 'stockMoves') {
+    if (existing) return no('immutable')
+    if (incoming === null) return no('forbidden')
+    if (who.role === 'tech' && !(incoming.reason === 'visite' && Number(incoming.delta) < 0)) return no('forbidden')
+  }
   // un nouveau contrat couvre au moins un appareil
   if (collection === 'contracts' && incoming && !existing && !(Array.isArray(incoming.elevatorIds) && incoming.elevatorIds.length > 0)) return no('contract_needs_elevator')
   if (collection === 'invoices') {
@@ -71,6 +77,7 @@ export function checkWrite(who: Principal, collection: Collection, existing: Doc
       return mine && wasMineOrFree ? ok : no('forbidden')
     }
     if (collection === 'defects') return ok
+    if (collection === 'stockMoves') return ok // validé plus haut : sorties de visite uniquement
     if (collection === 'elevators' && existing) {
       const same = canonicalJson(omit(existing, ['status', 'lastVisit'])) === canonicalJson(omit(incoming, ['status', 'lastVisit']))
       return same ? ok : no('forbidden')

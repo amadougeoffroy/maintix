@@ -367,3 +367,12 @@ html { scroll-behavior: smooth; } @media (prefers-reduced-motion: reduce) { html
 .demo-banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 8px 16px; background: #fbbf24; color: #1c1203; font-size: .9rem; }
 .demo-banner p { margin: 0; flex: 1 1 240px; } .demo-banner .btn { background: #1c1203; color: #fff; border-color: #1c1203; min-height: 36px; }
 @media print { .demo-banner, .l-alert { display: none !important; } }
+
+.stock-history { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; font-size: .92rem; }
+
+/* classement des appareils les plus en panne */
+.rank { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.rank li { display: grid; grid-template-columns: minmax(80px, 160px) 1fr 32px; gap: 10px; align-items: center; }
+.rank-label { overflow-wrap: anywhere; font-size: .92rem; } .rank-bar { height: 12px; border-radius: 999px; background: var(--surface-2); overflow: hidden; } .rank-bar span { display: block; height: 100%; background: var(--bad); border-radius: 999px; }
+
+.card.alert a, .card.alert .link { color: inherit; text-decoration: underline; }

@@ -22,6 +22,9 @@ import Profile from './pages/tech/Profile'
 import Dashboard from './pages/office/Dashboard'
 import Planning from './pages/office/Planning'
 import Parc from './pages/office/Parc'
+import Stock from './pages/office/Stock'
+import Pilotage from './pages/office/Pilotage'
+import Compliance from './pages/office/Compliance'
 import Defects from './pages/office/Defects'
 import Quotes from './pages/office/Quotes'
 import Contracts from './pages/office/Contracts'
@@ -83,6 +86,9 @@ export default function App() {
         <Route path="parc" element={<Parc />} />
         <Route path="elevator/:id" element={<ElevatorSheet mode="office" />} />
         <Route path="defects" element={<Defects />} />
+        <Route path="stock" element={<Stock />} />
+        <Route path="pilotage" element={<Pilotage />} />
+        <Route path="compliance" element={<Compliance />} />
         <Route path="quotes" element={<Quotes />} />
         <Route path="audit" element={<Audit />} />
         <Route path="search" element={<Search />} />

@@ -6,8 +6,10 @@ import { issueLocal } from './invoicing'
 import { ALL_ITEMS, DEFECT_DELAY, itemByKey } from './checklist'
 import { addDays, addMonths, daysBetween, iso, sha256, today, uid } from './util'
 import type { ParcRow } from './importer'
+import { movesForVisit } from './stock'
+import { completeItem } from './compliance'
 import type {
-  ChecklistAnswer, Client, Contract, Invoice, OrgSettings, Site, Defect, Elevator, Job, JobType, Quote, QuoteLine, Role, Severity, State, Tech, VisitData,
+  ChecklistAnswer, Client, ComplianceItem, Contract, Invoice, OrgSettings, Site, Defect, Elevator, Job, JobType, Quote, QuoteLine, Role, Severity, State, StockItem, Tech, VisitData,
 } from './types'
 
 /** `server` : l'API répond (vraie base, comptes, synchro). Sinon mode local de démonstration. */
@@ -21,7 +23,7 @@ export interface SyncOp {
   id: string
   data: Record<string, unknown> | null
 }
-const COLLECTIONS = ['clients', 'sites', 'elevators', 'techs', 'contracts', 'onCall', 'jobs', 'defects', 'quotes', 'invoices', 'settings'] as const
+const COLLECTIONS = ['clients', 'sites', 'elevators', 'techs', 'contracts', 'onCall', 'jobs', 'defects', 'quotes', 'invoices', 'settings', 'stock', 'stockMoves'] as const
 type Col = (typeof COLLECTIONS)[number]
 const docId = (col: Col, item: unknown) => String((item as Record<string, unknown>)[col === 'onCall' ? 'weekStart' : 'id'])
 let syncHook: ((ops: SyncOp[]) => void) | null = null
@@ -97,7 +99,7 @@ function update(fn: (s: State) => State) {
 export async function loadStore() {
   try {
     const saved = await get<State>(storeKey())
-    if (saved) state = saved
+    if (saved) state = { ...emptyState(), ...saved } // complète les collections ajoutées depuis l'enregistrement (stock, mouvements…)
     else if (runtime.server) state = emptyState()
     if (!runtime.server) {
       try { const sess = localStorage.getItem(DEMO_SESSION); if (sess) state = { ...state, session: JSON.parse(sess) } } catch { /* ignoré */ }
@@ -221,7 +223,7 @@ export const actions = {
   /** Mode serveur : remplit l'organisation avec des données de démonstration (identifiants uniques). */
   loadDemo() {
     const demo = remappedSeed((p) => uid(p))
-    update((s) => ({ ...s, clients: demo.clients, sites: demo.sites, elevators: demo.elevators, techs: demo.techs, contracts: demo.contracts, onCall: demo.onCall, jobs: demo.jobs, defects: demo.defects, quotes: demo.quotes, settings: s.settings.length ? s.settings : demo.settings }))
+    update((s) => ({ ...s, clients: demo.clients, sites: demo.sites, elevators: demo.elevators, techs: demo.techs, contracts: demo.contracts, onCall: demo.onCall, jobs: demo.jobs, defects: demo.defects, quotes: demo.quotes, stock: demo.stock, stockMoves: demo.stockMoves, settings: s.settings.length ? s.settings : demo.settings }))
   },
   login(role: Role, techId: string | null) {
     update((s) => ({ ...s, session: { ...s.session, role, techId } }))
@@ -237,6 +239,53 @@ export const actions = {
     emit()
   },
 
+  /** Échéances réglementaires d'un appareil : ajout ou modification. */
+  upsertCompliance(elevatorId: string, item: ComplianceItem) {
+    update((s) => ({
+      ...s,
+      elevators: s.elevators.map((e) => {
+        if (e.id !== elevatorId) return e
+        const list = e.compliance ?? []
+        return { ...e, compliance: list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [...list, item] }
+      }),
+    }))
+  },
+  removeCompliance(elevatorId: string, itemId: string) {
+    update((s) => ({ ...s, elevators: s.elevators.map((e) => (e.id === elevatorId ? { ...e, compliance: (e.compliance ?? []).filter((x) => x.id !== itemId) } : e)) }))
+  },
+  /** Valide une échéance accomplie : la suivante est programmée (ou l'échéance est soldée si elle n'est pas périodique). */
+  completeCompliance(elevatorId: string, itemId: string) {
+    update((s) => ({
+      ...s,
+      elevators: s.elevators.map((e) => {
+        if (e.id !== elevatorId) return e
+        return { ...e, compliance: (e.compliance ?? []).flatMap((x) => (x.id === itemId ? [completeItem(x, today())].filter((y): y is ComplianceItem => !!y) : [x])) }
+      }),
+    }))
+  },
+  /** Nouvelle référence de stock ; une quantité initiale crée un mouvement d'inventaire. */
+  addStockItem(i: Omit<StockItem, 'id' | 'createdAt'>, initialQty = 0) {
+    const id = uid('st')
+    const at = iso(new Date())
+    update((s) => ({
+      ...s,
+      stock: [...s.stock, { ...i, id, createdAt: today() }],
+      stockMoves: initialQty > 0 ? [...s.stockMoves, { id: uid('sm'), itemId: id, delta: initialQty, reason: 'inventaire', at, note: 'Stock initial' }] : s.stockMoves,
+    }))
+    return id
+  },
+  updateStockItem(id: string, patch: Partial<StockItem>) {
+    update((s) => ({ ...s, stock: s.stock.map((x) => (x.id === id ? { ...x, ...patch } : x)) }))
+  },
+  /** Mouvement de stock : entrée (achat), sortie, ou inventaire (ajuste le niveau à la quantité comptée). */
+  addStockMove(itemId: string, kind: 'achat' | 'sortie' | 'inventaire', qty: number, note?: string) {
+    update((s) => {
+      const level = s.stockMoves.filter((m) => m.itemId === itemId).reduce((t, m) => t + m.delta, 0)
+      const delta = kind === 'achat' ? Math.abs(qty) : kind === 'sortie' ? -Math.abs(qty) : qty - level
+      if (!delta) return s
+      return { ...s, stockMoves: [...s.stockMoves, { id: uid('sm'), itemId, delta, reason: kind === 'inventaire' ? 'inventaire' : kind, at: iso(new Date()), ...(note?.trim() ? { note: note.trim() } : {}), ...(s.session.techId ? { by: s.session.techId } : {}) }] }
+    })
+  },
   setStatus(jobId: string, status: Job['status']) {
     const labels: Record<string, string> = {
       en_route: 'Technicien en route',
@@ -467,7 +516,7 @@ export const actions = {
   /** Clôture : résumé, défauts, sceau SHA-256, prochaine visite. */
   async finishJob(jobId: string, minutes?: number) {
     const job = state.jobs.find((j) => j.id === jobId)
-    if (!job) return
+    if (!job || job.status === 'terminee') return // une visite ne se clôture qu'une fois : le stock n'est déduit qu'une fois
     const v = job.visit ?? emptyVisit()
     const now = iso(new Date())
     const done: Job = {
@@ -510,9 +559,12 @@ export const actions = {
           jobs.push({ id: uid('j'), type: 'entretien', elevatorId: job.elevatorId, techId: job.techId, date: next, status: 'planifiee', createdAt: now, timeline: [] })
         }
       }
+      // les pièces du stock utilisées pendant la visite sont déduites du stock
+      const stockMoves = [...s.stockMoves, ...movesForVisit(s.stock, v.parts, job.id, now, () => uid('sm'), s.session.techId ?? undefined)]
       return {
         ...s,
         jobs,
+        stockMoves,
         defects: [...defects, ...newDefects],
         elevators: s.elevators.map((e) =>
           e.id === job.elevatorId

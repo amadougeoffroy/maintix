@@ -68,3 +68,12 @@ export function compressImage(file: File, maxW = 1280, quality = 0.7): Promise<s
     reader.readAsDataURL(file)
   })
 }
+
+/** Télécharge un contenu texte sous forme de fichier. */
+export function downloadText(name: string, content: string, type = 'text/csv;charset=utf-8') {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([content], { type }))
+  a.download = name
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+}

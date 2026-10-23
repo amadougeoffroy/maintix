@@ -106,3 +106,61 @@ describe('santé du parc', () => {
     expect(txt).toContain('À surveiller')
   })
 })
+
+describe('stock de pièces et visites', () => {
+  const finish = async (parts: { name: string; qty: number }[]) => {
+    actions.setStatus('j1', 'sur_place')
+    actions.updateVisit('j1', { lockedOut: true, emergencyCallTest: 'ok', parts, signature: { absent: true, at: new Date().toISOString(), photo: 'x' } })
+    await actions.finishJob('j1', 20)
+  }
+  const level = (id: string) => getState().stockMoves.filter((m) => m.itemId === id).reduce((t, m) => t + m.delta, 0)
+
+  it('déduit du stock les pièces utilisées à la clôture, par nom', async () => {
+    expect(level('st1')).toBe(3)
+    await finish([{ name: 'Galet de porte palière', qty: 2 }, { name: 'Pièce hors stock', qty: 1 }])
+    expect(level('st1')).toBe(1)
+    const moves = getState().stockMoves.filter((m) => m.jobId === 'j1')
+    expect(moves).toHaveLength(1) // la pièce hors stock ne crée aucun mouvement
+    expect(moves[0]).toMatchObject({ itemId: 'st1', delta: -2, reason: 'visite' })
+  })
+  it('ne déduit le stock qu’une seule fois, même si la clôture est rejouée', async () => {
+    await finish([{ name: 'Contacteur', qty: 1 }])
+    await actions.finishJob('j1', 20)
+    expect(level('st3')).toBe(4)
+    expect(getState().stockMoves.filter((m) => m.jobId === 'j1')).toHaveLength(1)
+  })
+  it('enregistre entrées, sorties et inventaires', () => {
+    actions.addStockMove('st2', 'achat', 10, 'BL 123')
+    expect(level('st2')).toBe(30)
+    actions.addStockMove('st2', 'sortie', 4)
+    expect(level('st2')).toBe(26)
+    actions.addStockMove('st2', 'inventaire', 20, 'comptage')
+    expect(level('st2')).toBe(20)
+    const last = getState().stockMoves.at(-1)!
+    expect(last).toMatchObject({ delta: -6, reason: 'inventaire', note: 'comptage' })
+    actions.addStockMove('st2', 'inventaire', 20) // niveau déjà juste : aucun mouvement inutile
+    expect(getState().stockMoves.at(-1)).toBe(last)
+  })
+  it('crée une référence avec son stock initial', () => {
+    const id = actions.addStockItem({ name: 'Lampe cabine', minQty: 2, unitCost: 3000 }, 8)
+    expect(getState().stock.find((x) => x.id === id)).toMatchObject({ name: 'Lampe cabine', minQty: 2 })
+    expect(level(id)).toBe(8)
+    expect(getState().stockMoves.find((m) => m.itemId === id)).toMatchObject({ reason: 'inventaire', delta: 8 })
+  })
+})
+
+describe('échéances réglementaires', () => {
+  it('ajoute, valide (prochaine échéance) et supprime', () => {
+    actions.upsertCompliance('e4', { id: 'cx', kind: 'assurance', label: 'Assurance', due: today(), intervalMonths: 12 })
+    expect(getState().elevators.find((e) => e.id === 'e4')!.compliance).toHaveLength(1)
+    actions.completeCompliance('e4', 'cx')
+    const item = getState().elevators.find((e) => e.id === 'e4')!.compliance![0]
+    expect(item.lastDone).toBe(today())
+    expect(item.due > today()).toBe(true)
+    actions.upsertCompliance('e4', { id: 'cy', kind: 'autre', label: 'Autre', due: today() })
+    actions.completeCompliance('e4', 'cy') // sans périodicité : soldée
+    expect(getState().elevators.find((e) => e.id === 'e4')!.compliance!.map((x) => x.id)).toEqual(['cx'])
+    actions.removeCompliance('e4', 'cx')
+    expect(getState().elevators.find((e) => e.id === 'e4')!.compliance).toEqual([])
+  })
+})

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { actions, byId, contractFor, healthScore, useData } from '../store'
 import { Icon } from '../components/Icon'
+import { ComplianceEditor } from '../components/ComplianceEditor'
 import { History as HistoryPanel } from '../components/History'
 import { feedback } from '../feedback'
 import { Health, JOB_LABEL, QR, SeverityBadge, StatusBadge, publicUrl } from '../components/ui'
@@ -75,6 +76,8 @@ export default function ElevatorSheet({ mode }: { mode: 'tech' | 'office' }) {
           <Link to="/tech/urgences" className="btn"><Icon n="siren" /> Déclarer une panne</Link>
         </div>
       )}
+
+      <ComplianceEditor el={el} editable={mode === 'office'} />
 
       <section className="card stack">
         <h2>Accès & sécurité</h2>

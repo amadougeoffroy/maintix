@@ -54,7 +54,7 @@ test('bureau : tous les écrans, y compris factures, recherche et fiche client',
   test.setTimeout(120_000)
   await loginAs(page, /Responsable/)
   const problems: string[] = []
-  const routes = ['', '/planning', '/parc', '/clients', '/clients/c1', '/import', '/defects', '/quotes', '/invoices', '/contracts', '/oncall', '/qr', '/search', '/audit', '/settings', '/more', '/elevator/e4', '/dossier/e1']
+  const routes = ['', '/planning', '/parc', '/clients', '/clients/c1', '/import', '/defects', '/quotes', '/invoices', '/contracts', '/oncall', '/qr', '/search', '/audit', '/settings', '/more', '/elevator/e4', '/dossier/e1', '/stock', '/compliance', '/pilotage']
   for (const r of routes) { await page.goto(`/#/office${r}`); problems.push(...(await scan(page, `office${r}`))) }
   // détail d'une facture (brouillon)
   await page.goto('/#/office/invoices')
@@ -80,7 +80,7 @@ test.describe('mode sombre', () => {
     problems.push(...(await scan(page, 'visite-dark')))
     await page.goto('/'); await page.getByRole('button', { name: 'Quitter' }).click()
     await page.getByRole('button', { name: /Responsable/ }).click()
-    for (const r of ['', '/planning', '/parc', '/defects', '/contracts', '/invoices', '/clients/c1']) { await page.goto(`/#/office${r}`); problems.push(...(await scan(page, `office${r}-dark`))) }
+    for (const r of ['', '/planning', '/parc', '/defects', '/contracts', '/invoices', '/clients/c1', '/stock', '/compliance', '/pilotage']) { await page.goto(`/#/office${r}`); problems.push(...(await scan(page, `office${r}-dark`))) }
     expect(problems).toEqual([])
   })
 })

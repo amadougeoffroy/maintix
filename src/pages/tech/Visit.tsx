@@ -8,6 +8,7 @@ import { suggestFromNote, type NoteSuggestions } from '../../notes'
 import { itemByKey } from '../../checklist'
 import type { ItemStatus, Job } from '../../types'
 import { Icon } from '../../components/Icon'
+import { matchStockItem, stockRows as stockRowsOf } from '../../stock'
 import { feedback } from '../../feedback'
 
 type Step = { k: 'safety' } | { k: 'zone'; zone: Zone } | { k: 'measures' } | { k: 'diag' } | { k: 'parts' } | { k: 'sign' }
@@ -226,22 +227,26 @@ function PartsStep({ job }: { job: Job }) {
     setSugg(null)
     feedback.toast('Suggestions appliquées à la visite.')
   }
-  const add = (name: string) => {
+  const data = useData()
+  const stockRows = useMemo(() => stockRowsOf(data.stock, data.stockMoves), [data.stock, data.stockMoves])
+  const add = (name: string, stockId?: string) => {
     const ex = v.parts.find((p) => p.name === name)
-    actions.updateVisit(job.id, { parts: ex ? v.parts.map((p) => (p.name === name ? { ...p, qty: p.qty + 1 } : p)) : [...v.parts, { name, qty: 1 }] })
+    actions.updateVisit(job.id, { parts: ex ? v.parts.map((p) => (p.name === name ? { ...p, qty: p.qty + 1 } : p)) : [...v.parts, { name, qty: 1, ...(stockId ? { stockId } : {}) }] })
   }
   return (
     <div className="stack">
       <h2>Pièces & temps</h2>
       <div className="row wrap">
-        {COMMON_PARTS.map((p) => <button key={p} className="btn sm" onClick={() => add(p)}>+ {p}</button>)}
+        {stockRows.length > 0
+          ? stockRows.map((r) => <button key={r.item.id} className="btn sm" onClick={() => add(r.item.name, r.item.id)}>+ {r.item.name} <span className="muted small">({r.level} en stock)</span></button>)
+          : COMMON_PARTS.map((p) => <button key={p} className="btn sm" onClick={() => add(p)}>+ {p}</button>)}
       </div>
       <form className="row" onSubmit={(e) => { e.preventDefault(); if (custom.trim()) { add(custom.trim()); setCustom('') } }}>
         <input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Autre pièce" /><button className="btn">Ajouter</button>
       </form>
       {v.parts.map((p) => (
         <div key={p.name} className="card row between">
-          <span>{p.name}</span>
+          <span>{p.name}{(() => { const r = stockRows.find((x) => matchStockItem(data.stock, p)?.id === x.item.id); return r ? <span className="small muted"> · {p.qty > r.level ? `stock insuffisant (${r.level})` : `reste ${r.level - p.qty} en stock après`}</span> : stockRows.length ? <span className="small muted"> · hors stock</span> : null })()}</span>
           <span className="row">
             <button className="btn sm" aria-label="Moins" onClick={() => actions.updateVisit(job.id, { parts: v.parts.map((x) => (x.name === p.name ? { ...x, qty: x.qty - 1 } : x)).filter((x) => x.qty > 0) })}>−</button>
             <strong>{p.qty}</strong>

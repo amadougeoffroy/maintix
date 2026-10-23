@@ -34,6 +34,19 @@ export interface Elevator {
   machineRoom: 'haut' | 'bas' | 'sans local'
   status: 'ok' | 'panne' | 'arret'
   lastVisit?: string
+  /** échéances réglementaires (contrôle technique, assurance…) */
+  compliance?: ComplianceItem[]
+}
+export type ComplianceKind = 'controle_technique' | 'assurance' | 'extincteur' | 'autre'
+export interface ComplianceItem {
+  id: string
+  kind: ComplianceKind
+  label: string
+  /** prochaine échéance (AAAA-MM-JJ) */
+  due: string
+  /** périodicité en mois : à la validation, l'échéance avance d'autant */
+  intervalMonths?: number
+  lastDone?: string
 }
 export interface Certification {
   label: string
@@ -71,6 +84,10 @@ export interface Contract {
   lastIndexed?: string
   priceHistory?: PriceChange[]
   terminatedAt?: string
+  /** engagement de délai d'intervention pour un dépannage (heures) */
+  slaResponseHours?: number
+  /** engagement de délai pour une personne bloquée (minutes) */
+  slaTrappedMinutes?: number
 }
 export interface OnCallSlot {
   weekStart: string
@@ -88,6 +105,34 @@ export interface ChecklistAnswer {
 export interface Part {
   name: string
   qty: number
+  /** pièce du stock : la quantité est déduite à la clôture de la visite */
+  stockId?: string
+}
+/** Référence du stock de pièces. Le niveau n'est pas stocké : il se calcule à partir des mouvements (sûr hors ligne). */
+export interface StockItem {
+  id: string
+  name: string
+  ref?: string
+  unit?: string
+  /** seuil d'alerte : à ce niveau ou en dessous, la pièce est à réapprovisionner */
+  minQty: number
+  unitCost?: number
+  supplier?: string
+  createdAt: string
+  archived?: boolean
+}
+export type StockReason = 'inventaire' | 'achat' | 'sortie' | 'visite' | 'ajustement'
+/** Mouvement de stock : écrit une fois, jamais modifié. */
+export interface StockMove {
+  id: string
+  itemId: string
+  /** positif = entrée, négatif = sortie */
+  delta: number
+  reason: StockReason
+  jobId?: string
+  at: string
+  note?: string
+  by?: string
 }
 export interface Signature {
   absent: boolean
@@ -208,4 +253,6 @@ export interface State {
   quotes: Quote[]
   invoices: Invoice[]
   settings: OrgSettings[]
+  stock: StockItem[]
+  stockMoves: StockMove[]
 }

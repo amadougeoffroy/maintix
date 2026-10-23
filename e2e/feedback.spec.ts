@@ -23,7 +23,7 @@ test.describe('retours d’action et menu groupé', () => {
 
   test('le menu latéral est groupé et repliable', async ({ page }) => {
     const nav = page.getByRole('navigation').first()
-    await expect(nav.getByText('Pilotage')).toBeVisible()
+    await expect(nav.getByRole('button', { name: /Pilotage/ })).toBeVisible()
     await expect(nav.getByText('Commercial')).toBeVisible()
     const group = nav.getByRole('button', { name: /Commercial/ })
     await group.click()

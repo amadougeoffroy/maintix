@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { ChevronDown, ShieldCheck, Search as SearchIcon, Building2, History, Receipt, CalendarDays, Download, Calculator, FileText, LayoutDashboard, Menu, PhoneCall, QrCode, ScanLine, Settings, Siren, TriangleAlert, User, Users, type LucideIcon } from 'lucide-react'
+import { BarChart3, ClipboardCheck, Package, ChevronDown, ShieldCheck, Search as SearchIcon, Building2, History, Receipt, CalendarDays, Download, Calculator, FileText, LayoutDashboard, Menu, PhoneCall, QrCode, ScanLine, Settings, Siren, TriangleAlert, User, Users, type LucideIcon } from 'lucide-react'
 import { Logo } from '../brand/Logo'
 import { byId, useData } from '../store'
 import { feedback } from '../feedback'
@@ -119,6 +119,7 @@ interface NavGroup { key: string; label: string; links: readonly NavLinkDef[] }
 const OFFICE_GROUPS: readonly NavGroup[] = [
   { key: 'pilotage', label: 'Pilotage', links: [
     ['/office', LayoutDashboard, 'Tableau de bord', true],
+    ['/office/pilotage', BarChart3, 'Pilotage', false],
     ['/office/planning', CalendarDays, 'Planning', false],
     ['/office/oncall', PhoneCall, 'Astreinte', false],
     ['/office/search', SearchIcon, 'Recherche', false],
@@ -127,6 +128,8 @@ const OFFICE_GROUPS: readonly NavGroup[] = [
     ['/office/parc', Building2, 'Parc', false],
     ['/office/clients', Users, 'Clients & sites', false],
     ['/office/defects', TriangleAlert, 'Défauts', false],
+    ['/office/stock', Package, 'Stock de pièces', false],
+    ['/office/compliance', ClipboardCheck, 'Échéances', false],
     ['/office/qr', QrCode, 'QR codes', false],
     ['/office/import', Download, 'Importer le parc', false],
   ] },

@@ -1,0 +1,122 @@
+import { expect, test } from '@playwright/test'
+
+test.use({ viewport: { width: 1280, height: 900 } })
+test.beforeEach(async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: /Responsable/ }).click()
+})
+
+test.describe('stock de pièces', () => {
+  test('niveaux, alertes, mouvements et bon de commande', async ({ page }) => {
+    await page.goto('/#/office/stock')
+    await expect(page.getByRole('heading', { name: 'Stock de pièces' })).toBeVisible()
+    const galet = page.locator('article', { hasText: 'Galet de porte palière' })
+    await expect(galet).toContainText('Stock bas') // 12 − 9 = 3, seuil 4
+    await expect(page.locator('article', { hasText: 'Patin de porte' })).toContainText('En stock')
+    // entrée de stock : le niveau remonte et l'alerte disparaît
+    await galet.getByRole('button', { name: '+ Entrée' }).click()
+    await galet.getByLabel('Quantité').fill('10')
+    await galet.getByLabel(/Note/).fill('BL 456')
+    await galet.getByRole('button', { name: 'Enregistrer' }).click()
+    await expect(page.locator('.toast-item', { hasText: '10 × Galet de porte palière ajouté' })).toBeVisible()
+    await expect(galet).toContainText('En stock')
+    await expect(galet.getByLabel(/Stock : 13/)).toBeVisible()
+    await galet.getByText(/Historique/).click()
+    await expect(galet).toContainText('BL 456')
+    // sortie puis inventaire
+    await galet.getByRole('button', { name: '− Sortie' }).click()
+    await galet.getByLabel('Quantité').fill('5')
+    await galet.getByRole('button', { name: 'Enregistrer' }).click()
+    await expect(galet.getByLabel(/Stock : 8/)).toBeVisible()
+    await galet.getByRole('button', { name: 'Inventaire' }).click()
+    await galet.getByLabel('Quantité comptée').fill('2')
+    await galet.getByRole('button', { name: 'Enregistrer' }).click()
+    await expect(galet.getByLabel(/Stock : 2/)).toBeVisible()
+    await expect(galet).toContainText('Stock bas')
+    // filtre et bon de commande
+    await page.getByRole('radio', { name: /À réapprovisionner/ }).click()
+    await expect(page.locator('article', { hasText: 'Patin de porte' })).toHaveCount(0)
+    await page.getByRole('button', { name: /Bon de commande/ }).click()
+    const order = page.getByRole('region', { name: 'Bon de commande' })
+    await expect(order).toContainText('Galet de porte palière')
+    await expect(order).toContainText('Garniture de frein')
+    const download = page.waitForEvent('download')
+    await order.getByRole('button', { name: 'Télécharger (CSV)' }).click()
+    expect((await download).suggestedFilename()).toMatch(/^bon-de-commande-.*\.csv$/)
+  })
+  test('ajout d’une référence avec stock initial, puis archivage', async ({ page }) => {
+    await page.goto('/#/office/stock')
+    await page.getByRole('button', { name: '+ Pièce' }).click()
+    await page.getByLabel('Désignation').fill('Lampe cabine LED')
+    await page.getByLabel('Référence').fill('LC-1')
+    await page.getByLabel('Seuil d’alerte').fill('3')
+    await page.getByLabel('Quantité en stock').fill('8')
+    await page.getByRole('button', { name: 'Enregistrer' }).click()
+    const lampe = page.locator('article', { hasText: 'Lampe cabine LED' })
+    await expect(lampe.getByLabel(/Stock : 8/)).toBeVisible()
+    await lampe.getByRole('button', { name: 'Archiver' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Archiver' }).click()
+    await expect(lampe).toHaveCount(0)
+  })
+})
+
+test.describe('échéances réglementaires', () => {
+  test('la page liste l’urgent, et une échéance se valide', async ({ page }) => {
+    await page.goto('/#/office/compliance')
+    await expect(page.getByRole('heading', { name: 'Échéances réglementaires' })).toBeVisible()
+    const insurance = page.locator('article', { hasText: 'Assurance ascenseur' }).first()
+    await expect(insurance).toContainText('dépassée de 5 j') // seed : e2, 5 jours de retard
+    await expect(page.locator('article', { hasText: 'Contrôle technique périodique' }).first()).toContainText('dans 20 j')
+    await insurance.getByRole('button', { name: 'Valider (fait)' }).click()
+    await expect(page.locator('.toast-item', { hasText: 'prochaine échéance programmée' })).toBeVisible()
+    await expect(page.locator('article', { hasText: 'dépassée de 5 j' })).toHaveCount(0)
+  })
+  test('on ajoute une échéance depuis la fiche d’un appareil', async ({ page }) => {
+    await page.goto('/#/office/elevator/e4')
+    const section = page.getByRole('region', { name: 'Échéances réglementaires' })
+    await section.getByRole('button', { name: '+ Échéance' }).click()
+    await section.getByLabel('Prochaine échéance').fill(new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10))
+    await section.getByRole('button', { name: 'Ajouter' }).click()
+    await expect(section).toContainText('Contrôle technique')
+    await expect(section).toContainText('dans 10 j')
+    await page.goto('/#/office/compliance')
+    await expect(page.locator('article', { hasText: 'Ascenseur Sud' })).toBeVisible()
+  })
+})
+
+test.describe('pilotage', () => {
+  test('affiche les indicateurs, change de période et exporte', async ({ page }) => {
+    await page.goto('/#/office/pilotage')
+    await expect(page.getByRole('heading', { name: 'Pilotage' })).toBeVisible()
+    await expect(page.getByText('Délai moyen d’arrivée')).toBeVisible()
+    await expect(page.getByText('Respect du SLA')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Appareils les plus en panne' })).toBeVisible()
+    await page.getByRole('radio', { name: '12 mois' }).click()
+    await expect(page.getByRole('radio', { name: '12 mois' })).toHaveAttribute('aria-checked', 'true')
+    const download = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Exporter (CSV)' }).click()
+    expect((await download).suggestedFilename()).toMatch(/^pilotage-.*\.csv$/)
+  })
+  test('le tableau de bord signale échéances, stock et SLA', async ({ page }) => {
+    await page.goto('/#/office')
+    await expect(page.getByText('Échéances urgentes')).toBeVisible()
+    await expect(page.getByText('Pièces à réapprovisionner').first()).toBeVisible()
+    await expect(page.getByRole('link', { name: /pièce\(s\) à réapprovisionner/ })).toBeVisible()
+  })
+  test('un délai garanti en danger apparaît sur le tableau de bord', async ({ page }) => {
+    // horloge pilotée : panne signalée sur un appareil sous contrat avec SLA de 4 h, puis 3 h 30 plus tard (au-delà de 75 % du délai)
+    await page.clock.install({ time: new Date('2026-10-22T08:00:00Z') })
+    await page.goto('/#/signal/e1')
+    await page.getByLabel(/Que se passe-t-il/).fill('Porte bloquée au 2e')
+    await page.getByRole('button', { name: 'Envoyer le signalement' }).click()
+    await expect(page.getByText('Signalement envoyé')).toBeVisible()
+    await page.goto('/#/office')
+    await expect(page.getByText(/avant le délai garanti/)).toHaveCount(0) // 0 min écoulée : pas à risque
+    await page.clock.fastForward('03:30:00')
+    await page.clock.runFor(61_000) // l'écran se rafraîchit seul chaque minute
+    await expect(page.getByText(/Il reste (2[6-9]|30) min avant le délai garanti \(4 h\)/)).toBeVisible()
+    await page.clock.fastForward('01:00:00')
+    await page.clock.runFor(61_000)
+    await expect(page.getByText(/Délai garanti dépassé de (3[0-5]) min/)).toBeVisible()
+  })
+})
